@@ -1,6 +1,11 @@
+/* global Word */
+
 import React, { useState } from "react";
 import { Button, Spinner, Text, Badge } from "@fluentui/react-components";
 import { useStore } from "../store";
+import { getSuggestions } from "../modules/suggestions";
+import { loadStyleProfile } from "../modules/style";
+import { insertAtCursor } from "../services/wordApi";
 import type { Suggestion } from "../types";
 
 const typeLabels: Record<string, string> = {
@@ -12,15 +17,51 @@ const typeLabels: Record<string, string> = {
 };
 
 export function SuggestionsTab() {
-  const { loading } = useStore();
+  const { loading, setLoading } = useStore();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSuggest = async () => {
-    // Will be wired up in Phase 8
+    setLoading(true);
+    setError(null);
+    setSuggestions([]);
+    try {
+      // Get text before and after cursor position
+      const { before, after } = await Word.run(async (ctx) => {
+        const body = ctx.document.body;
+        const sel = ctx.document.getSelection();
+        // Range from body start to selection start
+        const beforeRange = body.getRange("Start").expandTo(sel.getRange("Start"));
+        // Range from selection end to body end
+        const afterRange = sel.getRange("End").expandTo(body.getRange("End"));
+        beforeRange.load("text");
+        afterRange.load("text");
+        await ctx.sync();
+        // Limit context to ~1000 words each side
+        const bWords = beforeRange.text.split(/\s+/);
+        const aWords = afterRange.text.split(/\s+/);
+        return {
+          before: bWords.slice(-1000).join(" "),
+          after: aWords.slice(0, 1000).join(" "),
+        };
+      });
+
+      const profile = loadStyleProfile();
+      const profileStr = profile ? JSON.stringify(profile) : "Neutral-akademisch";
+      const res = await getSuggestions(before, after, profileStr);
+      setSuggestions(res.suggestions || []);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setLoading(false);
   };
 
   const handleInsert = async (text: string) => {
-    // Will insert at cursor via wordApi in Phase 10
+    try {
+      await insertAtCursor(text);
+    } catch (e) {
+      setError("Einfügen fehlgeschlagen: " + (e as Error).message);
+    }
   };
 
   return (
@@ -30,8 +71,10 @@ export function SuggestionsTab() {
       </Button>
 
       <Text size={200} style={{ color: "#666" }}>
-        Markieren Sie eine Stelle im Text, an der ein Vorschlag eingefügt werden soll.
+        Setzen Sie den Cursor an die Stelle, an der ein Vorschlag eingefügt werden soll.
       </Text>
+
+      {error && <Text style={{ color: "#d32f2f" }}>{error}</Text>}
 
       {suggestions.map((s, i) => (
         <div
