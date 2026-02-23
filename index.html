@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SchreibAssistent Pro – KI-Schreibassistent für Microsoft Word</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; line-height: 1.6; }
+    .hero { background: linear-gradient(135deg, #0f6cbd 0%, #115ea3 100%); color: white; padding: 80px 20px; text-align: center; }
+    .hero img { width: 80px; height: 80px; border-radius: 16px; margin-bottom: 20px; }
+    .hero h1 { font-size: 2.4em; margin-bottom: 12px; }
+    .hero p { font-size: 1.2em; max-width: 600px; margin: 0 auto 30px; opacity: 0.9; }
+    .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .badge { background: rgba(255,255,255,0.2); padding: 6px 16px; border-radius: 20px; font-size: 0.9em; }
+    .features { max-width: 800px; margin: 60px auto; padding: 0 20px; }
+    .features h2 { text-align: center; font-size: 1.8em; margin-bottom: 40px; color: #0f6cbd; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; }
+    .card { background: #f8f9fa; border-radius: 12px; padding: 24px; border: 1px solid #e8e8e8; }
+    .card h3 { color: #115ea3; margin-bottom: 8px; font-size: 1.1em; }
+    .card p { font-size: 0.95em; color: #555; }
+    .install { max-width: 800px; margin: 60px auto; padding: 0 20px; text-align: center; }
+    .install h2 { font-size: 1.8em; margin-bottom: 20px; color: #0f6cbd; }
+    .steps { text-align: left; max-width: 500px; margin: 20px auto; }
+    .steps li { margin-bottom: 12px; }
+    .steps code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+    footer { text-align: center; padding: 40px 20px; color: #888; font-size: 0.9em; border-top: 1px solid #eee; margin-top: 60px; }
+    footer a { color: #0f6cbd; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <img src="assets/icon-80.png" alt="SchreibAssistent Pro Icon" />
+    <h1>SchreibAssistent Pro</h1>
+    <p>KI-gestützter Schreibassistent für deutsche Texte in Microsoft Word</p>
+    <div class="badges">
+      <span class="badge">Grammatik</span>
+      <span class="badge">Lektorat</span>
+      <span class="badge">Stilanalyse</span>
+      <span class="badge">Quellenprüfung</span>
+      <span class="badge">Vorschläge</span>
+    </div>
+  </div>
+
+  <div class="features">
+    <h2>Funktionen</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Grammatikkorrektur</h3>
+        <p>Erkennt Fehler bei Kasus, Genus, Kommasetzung, Konjunktiv und zusammengesetzten Wörtern. Drei Modi: Sanft, Standard, Streng.</p>
+      </div>
+      <div class="card">
+        <h3>Wissenschaftliches Lektorat</h3>
+        <p>Prüft akademische Texte auf Kohärenz, Argumentation, Fachsprache und Präzision mit detailliertem Scoring.</p>
+      </div>
+      <div class="card">
+        <h3>Quellenprüfung</h3>
+        <p>Überprüft Zitierungen auf Konsistenz und Vollständigkeit nach APA, Harvard, Chicago oder IEEE.</p>
+      </div>
+      <div class="card">
+        <h3>Stilanalyse</h3>
+        <p>Erstellt ein Stilprofil Ihres Textes und prüft auf stilistische Konsistenz. Profile werden gespeichert.</p>
+      </div>
+      <div class="card">
+        <h3>KI-Vorschläge</h3>
+        <p>Kontextbezogene Textvorschläge: Vervollständigungen, Erweiterungen, Überleitungen, Zusammenfassungen.</p>
+      </div>
+      <div class="card">
+        <h3>Große Dokumente</h3>
+        <p>Unterstützt Dokumente mit 100+ Seiten durch intelligentes Chunking mit paralleler Verarbeitung.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="install">
+    <h2>Installation</h2>
+    <p>SchreibAssistent Pro ist als Microsoft Word Add-in verfügbar.</p>
+    <ol class="steps">
+      <li>Öffnen Sie Word und klicken Sie auf <strong>Add-Ins</strong> im Home-Tab</li>
+      <li>Suchen Sie nach <strong>"SchreibAssistent Pro"</strong> im Store</li>
+      <li>Klicken Sie auf <strong>Hinzufügen</strong></li>
+      <li>Melden Sie sich mit Ihrem OpenAI-Konto an</li>
+    </ol>
+    <p style="margin-top: 20px; color: #888; font-size: 0.9em;">Benötigt ein OpenAI-Konto mit API-Zugang.</p>
+  </div>
+
+  <footer>
+    <p>
+      <a href="https://github.com/sucruf111/SchreibAssistentPro">GitHub</a> &middot;
+      <a href="privacy.html">Datenschutz</a> &middot;
+      Open Source (MIT)
+    </p>
+  </footer>
+</body>
+</html>
