@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 
 module.exports = (env, argv) => {
@@ -41,7 +42,14 @@ module.exports = (env, argv) => {
         directory: path.join(__dirname, "dist"),
       },
       port: 3000,
-      https: true,
+      server: {
+        type: "https",
+        options: {
+          key: fs.readFileSync(path.resolve(process.env.HOME, ".office-addin-dev-certs/localhost.key")),
+          cert: fs.readFileSync(path.resolve(process.env.HOME, ".office-addin-dev-certs/localhost.crt")),
+          ca: fs.readFileSync(path.resolve(process.env.HOME, ".office-addin-dev-certs/ca.crt")),
+        },
+      },
       headers: {
         "Access-Control-Allow-Origin": "*",
       },
