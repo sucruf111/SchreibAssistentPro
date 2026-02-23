@@ -48,14 +48,12 @@ export function CorrectionTab() {
     try {
       await clearAnnotations();
 
-      // Try selection first, fall back to full document
       const selection = await getSelection();
       if (selection && selection.trim().length > 0) {
         const results = await checkGrammar(selection, mode);
         setCorrections(results);
         if (results.length > 0) await markErrors(results, correctionsEnabled);
       } else {
-        // Full document — may need chunking
         const paragraphs = await extractDocument();
         const totalWords = paragraphs.reduce((s, p) => s + p.wordCount, 0);
 
@@ -65,19 +63,14 @@ export function CorrectionTab() {
           setCorrections(results);
           if (results.length > 0) await markErrors(results, correctionsEnabled);
         } else {
-          // Large doc: chunk + parallel
           const { chunks, meta } = chunkDocument(paragraphs);
           const systemPrompt = GRAMMAR_PROMPT + (GRAMMAR_MODE_EXTRA[mode] || "");
           const chunkResults = await analyzeChunks(
-            chunks,
-            meta,
-            "grammar",
-            systemPrompt,
+            chunks, meta, "grammar", systemPrompt,
             (done, total) => setProgress({ done, total })
           );
           setProgress(null);
 
-          // Merge all corrections
           const all: GrammarCorrection[] = [];
           for (const r of chunkResults.values()) {
             if (r.corrections) all.push(...r.corrections);
@@ -93,59 +86,89 @@ export function CorrectionTab() {
     setLoading(false);
   };
 
+  const errorCount = corrections.filter((c) => c.severity === "error").length;
+  const warnCount = corrections.filter((c) => c.severity === "warning").length;
+  const infoCount = corrections.filter((c) => c.severity === "info").length;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Button appearance="primary" onClick={handleCheck} disabled={loading}>
-          {loading ? <Spinner size="tiny" /> : "Text prüfen"}
-        </Button>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <Label size="small">Korrekturen</Label>
-          <Switch
-            checked={correctionsEnabled}
-            onChange={(_, data) => handleToggle(data.checked)}
-          />
+      {/* Action Bar */}
+      <div style={cardStyle}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Button appearance="primary" onClick={handleCheck} disabled={loading} style={{ borderRadius: 8, fontWeight: 600 }}>
+            {loading ? <Spinner size="tiny" /> : "Text prüfen"}
+          </Button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Label size="small" style={{ color: "#888" }}>Markierungen</Label>
+            <Switch checked={correctionsEnabled} onChange={(_, data) => handleToggle(data.checked)} />
+          </div>
         </div>
       </div>
 
       <ChunkProgress />
 
       {error && (
-        <Text style={{ color: "#d32f2f" }}>{error}</Text>
+        <div style={{ padding: 12, background: "#fde8e8", borderRadius: 8, border: "1px solid #f5c6c6" }}>
+          <Text style={{ color: "#c62828", fontSize: 12 }}>{error}</Text>
+        </div>
+      )}
+
+      {/* Summary Stats */}
+      {hasRun && !error && corrections.length > 0 && (
+        <div style={{ ...cardStyle, display: "flex", gap: 0 }}>
+          {[
+            { count: errorCount, label: "Fehler", color: "#d32f2f" },
+            { count: warnCount, label: "Warnungen", color: "#f57c00" },
+            { count: infoCount, label: "Hinweise", color: "#1976d2" },
+          ].map((s, i) => (
+            <React.Fragment key={s.label}>
+              {i > 0 && <div style={{ width: 1, background: "#eee" }} />}
+              <div style={{ flex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: s.color }}>{s.count}</div>
+                <div style={{ fontSize: 10, color: "#888" }}>{s.label}</div>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
       )}
 
       {hasRun && !error && corrections.length === 0 && (
-        <Text style={{ color: "green" }}>Keine Fehler gefunden.</Text>
+        <div style={{ padding: 20, background: "#e8f5e9", borderRadius: 10, textAlign: "center", border: "1px solid #c8e6c9" }}>
+          <div style={{ fontSize: 28, marginBottom: 4 }}>&#10003;</div>
+          <Text style={{ color: "#2e7d32", fontWeight: 600 }}>Keine Fehler gefunden!</Text>
+        </div>
       )}
 
+      {/* Correction Cards */}
       {corrections.map((c, i) => (
         <div
           key={i}
           style={{
-            padding: 8,
-            borderLeft: `3px solid ${c.severity === "error" ? "#d32f2f" : c.severity === "warning" ? "#ffc107" : "#2196f3"}`,
-            background: "#fafafa",
-            borderRadius: 4,
+            ...cardStyle,
+            borderLeft: `4px solid ${c.severity === "error" ? "#d32f2f" : c.severity === "warning" ? "#f57c00" : "#1976d2"}`,
           }}
         >
-          <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
-            <Badge color={severityColor[c.severity]} size="small">
-              {typeLabels[c.type] || c.type}
-            </Badge>
-          </div>
-          <Text size={200} style={{ textDecoration: "line-through", color: "#999" }}>
+          <Badge color={severityColor[c.severity]} size="small" style={{ fontSize: 10, marginBottom: 8 }}>
+            {typeLabels[c.type] || c.type}
+          </Badge>
+          <div style={{ fontSize: 12, color: "#999", textDecoration: "line-through", marginBottom: 2 }}>
             {c.original}
-          </Text>
-          <br />
-          <Text size={200} weight="semibold">
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#2e7d32" }}>
             {c.suggestion}
-          </Text>
-          <br />
-          <Text size={100} style={{ color: "#666", marginTop: 4 }}>
+          </div>
+          <div style={{ fontSize: 11, color: "#666", marginTop: 6, lineHeight: 1.4 }}>
             {c.explanation}
-          </Text>
+          </div>
         </div>
       ))}
     </div>
   );
 }
+
+const cardStyle: React.CSSProperties = {
+  background: "white",
+  borderRadius: 10,
+  padding: "10px 14px",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+};
