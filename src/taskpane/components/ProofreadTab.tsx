@@ -17,6 +17,26 @@ const categoryLabels: Record<string, string> = {
   formal: "Formales",
 };
 
+const categoryIcons: Record<string, string> = {
+  structure: "\uD83C\uDFD7",
+  argumentation: "\uD83D\uDCAC",
+  precision: "\uD83C\uDFAF",
+  conventions: "\uD83D\uDCCB",
+  formal: "\uD83D\uDCC4",
+};
+
+function scoreColor(score: number): string {
+  if (score >= 80) return "#2e7d32";
+  if (score >= 60) return "#f57c00";
+  return "#d32f2f";
+}
+
+function scoreBg(score: number): string {
+  if (score >= 80) return "#e8f5e9";
+  if (score >= 60) return "#fff3e0";
+  return "#fde8e8";
+}
+
 export function ProofreadTab() {
   const { loading, setLoading, discipline, setProgress } = useStore();
   const [result, setResult] = useState<ProofreadResult | null>(null);
@@ -48,7 +68,6 @@ export function ProofreadTab() {
           );
           setProgress(null);
 
-          // Average scores across chunks
           const scoreKeys = ["structure", "argumentation", "precision", "conventions", "formal"] as const;
           const merged: ProofreadResult = {
             scores: {
@@ -89,53 +108,79 @@ export function ProofreadTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <Button appearance="primary" onClick={handleProofread} disabled={loading}>
-        {loading ? <Spinner size="tiny" /> : "Wissenschaftliches Lektorat"}
-      </Button>
+      <div style={cardStyle}>
+        <Button appearance="primary" onClick={handleProofread} disabled={loading} style={{ width: "100%", borderRadius: 8, fontWeight: 600 }}>
+          {loading ? <Spinner size="tiny" /> : "Wissenschaftliches Lektorat starten"}
+        </Button>
+      </div>
 
       <ChunkProgress />
 
-      {error && <Text style={{ color: "#d32f2f" }}>{error}</Text>}
+      {error && (
+        <div style={{ padding: 12, background: "#fde8e8", borderRadius: 8, border: "1px solid #f5c6c6" }}>
+          <Text style={{ color: "#c62828", fontSize: 12 }}>{error}</Text>
+        </div>
+      )}
 
       {result && (
         <>
-          <div style={{ textAlign: "center", margin: "8px 0" }}>
-            <Text size={600} weight="bold">
-              {result.overall_score}/100
-            </Text>
-            <br />
-            <Text size={200}>{result.summary}</Text>
+          {/* Overall Score Circle */}
+          <div style={{ ...cardStyle, textAlign: "center", padding: "20px 14px" }}>
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: "50%",
+                background: scoreBg(result.overall_score),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 8px",
+                border: `3px solid ${scoreColor(result.overall_score)}`,
+              }}
+            >
+              <span style={{ fontSize: 24, fontWeight: 700, color: scoreColor(result.overall_score) }}>
+                {result.overall_score}
+              </span>
+            </div>
+            <Text size={200} style={{ color: "#888" }}>Gesamtbewertung</Text>
+            {result.summary && (
+              <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>{result.summary}</div>
+            )}
           </div>
 
+          {/* Category Scores */}
           {Object.entries(result.scores).map(([key, val]) => (
-            <div key={key} style={{ padding: 8, background: "#fafafa", borderRadius: 4 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <Text weight="semibold">{categoryLabels[key] || key}</Text>
-                <Text>{val.score}/100</Text>
+            <div key={key} style={cardStyle}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 14 }}>{categoryIcons[key] || ""}</span>
+                  <Text weight="semibold" style={{ fontSize: 13 }}>{categoryLabels[key] || key}</Text>
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: scoreColor(val.score) }}>
+                  {val.score}
+                </span>
               </div>
-              <div
-                style={{
-                  height: 4,
-                  background: "#e0e0e0",
-                  borderRadius: 2,
-                  marginTop: 4,
-                }}
-              >
+              {/* Progress Bar */}
+              <div style={{ height: 6, background: "#eee", borderRadius: 3, overflow: "hidden" }}>
                 <div
                   style={{
-                    height: 4,
+                    height: 6,
                     width: `${val.score}%`,
-                    background: val.score >= 70 ? "#4caf50" : val.score >= 40 ? "#ffc107" : "#d32f2f",
-                    borderRadius: 2,
+                    background: scoreColor(val.score),
+                    borderRadius: 3,
+                    transition: "width 0.5s ease",
                   }}
                 />
               </div>
               {val.issues.length > 0 && (
-                <ul style={{ margin: "4px 0 0 16px", padding: 0, fontSize: 12 }}>
+                <div style={{ marginTop: 8 }}>
                   {val.issues.map((issue, i) => (
-                    <li key={i}>{issue}</li>
+                    <div key={i} style={{ fontSize: 11, color: "#666", padding: "3px 0", borderTop: i > 0 ? "1px solid #f0f0f0" : "none" }}>
+                      {issue}
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
             </div>
           ))}
@@ -144,3 +189,10 @@ export function ProofreadTab() {
     </div>
   );
 }
+
+const cardStyle: React.CSSProperties = {
+  background: "white",
+  borderRadius: 10,
+  padding: "10px 14px",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+};

@@ -16,28 +16,34 @@ const typeLabels: Record<string, string> = {
   counterargument: "Gegenargument",
 };
 
+const typeColors: Record<string, string> = {
+  completion: "#1565c0",
+  expansion: "#6a1b9a",
+  transition: "#00695c",
+  summary: "#e65100",
+  counterargument: "#c62828",
+};
+
 export function SuggestionsTab() {
   const { loading, setLoading } = useStore();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [insertedIndex, setInsertedIndex] = useState<number | null>(null);
 
   const handleSuggest = async () => {
     setLoading(true);
     setError(null);
     setSuggestions([]);
+    setInsertedIndex(null);
     try {
-      // Get text before and after cursor position
       const { before, after } = await Word.run(async (ctx) => {
         const body = ctx.document.body;
         const sel = ctx.document.getSelection();
-        // Range from body start to selection start
         const beforeRange = body.getRange("Start").expandTo(sel.getRange("Start"));
-        // Range from selection end to body end
         const afterRange = sel.getRange("End").expandTo(body.getRange("End"));
         beforeRange.load("text");
         afterRange.load("text");
         await ctx.sync();
-        // Limit context to ~1000 words each side
         const bWords = beforeRange.text.split(/\s+/);
         const aWords = afterRange.text.split(/\s+/);
         return {
@@ -56,9 +62,10 @@ export function SuggestionsTab() {
     setLoading(false);
   };
 
-  const handleInsert = async (text: string) => {
+  const handleInsert = async (text: string, index: number) => {
     try {
       await insertAtCursor(text);
+      setInsertedIndex(index);
     } catch (e) {
       setError("Einfügen fehlgeschlagen: " + (e as Error).message);
     }
@@ -66,40 +73,59 @@ export function SuggestionsTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <Button appearance="primary" onClick={handleSuggest} disabled={loading}>
-        {loading ? <Spinner size="tiny" /> : "Vorschläge generieren"}
-      </Button>
+      <div style={cardStyle}>
+        <Button appearance="primary" onClick={handleSuggest} disabled={loading} style={{ width: "100%", borderRadius: 8, fontWeight: 600 }}>
+          {loading ? <Spinner size="tiny" /> : "Vorschläge generieren"}
+        </Button>
+        <div style={{ fontSize: 11, color: "#888", textAlign: "center", marginTop: 6 }}>
+          Setzen Sie den Cursor an die gewünschte Stelle
+        </div>
+      </div>
 
-      <Text size={200} style={{ color: "#666" }}>
-        Setzen Sie den Cursor an die Stelle, an der ein Vorschlag eingefügt werden soll.
-      </Text>
-
-      {error && <Text style={{ color: "#d32f2f" }}>{error}</Text>}
+      {error && (
+        <div style={{ padding: 12, background: "#fde8e8", borderRadius: 8, border: "1px solid #f5c6c6" }}>
+          <Text style={{ color: "#c62828", fontSize: 12 }}>{error}</Text>
+        </div>
+      )}
 
       {suggestions.map((s, i) => (
         <div
           key={i}
           style={{
-            padding: 8,
-            background: "#fafafa",
-            borderRadius: 4,
-            border: "1px solid #e0e0e0",
+            ...cardStyle,
+            borderLeft: `4px solid ${typeColors[s.type] || "#0f6cbd"}`,
+            opacity: insertedIndex !== null && insertedIndex !== i ? 0.5 : 1,
+            transition: "opacity 0.2s",
           }}
         >
-          <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}>
-            <Badge color="brand" size="small">
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <Badge color="brand" size="small" style={{ fontSize: 10 }}>
               {typeLabels[s.type] || s.type}
             </Badge>
-            <Text size={100} style={{ color: "#666" }}>
-              {s.description}
-            </Text>
+            <span style={{ fontSize: 11, color: "#888" }}>{s.description}</span>
           </div>
-          <Text size={200} style={{ whiteSpace: "pre-wrap" }}>
+          <div
+            style={{
+              fontSize: 12,
+              lineHeight: 1.5,
+              color: "#333",
+              padding: "8px 10px",
+              background: "#f8f9fa",
+              borderRadius: 6,
+              whiteSpace: "pre-wrap",
+            }}
+          >
             {s.text}
-          </Text>
-          <div style={{ marginTop: 6 }}>
-            <Button size="small" appearance="subtle" onClick={() => handleInsert(s.text)}>
-              Einfügen
+          </div>
+          <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+            <Button
+              size="small"
+              appearance={insertedIndex === i ? "subtle" : "primary"}
+              onClick={() => handleInsert(s.text, i)}
+              disabled={insertedIndex === i}
+              style={{ borderRadius: 6, fontSize: 11 }}
+            >
+              {insertedIndex === i ? "Eingefügt ✓" : "Einfügen"}
             </Button>
           </div>
         </div>
@@ -107,3 +133,10 @@ export function SuggestionsTab() {
     </div>
   );
 }
+
+const cardStyle: React.CSSProperties = {
+  background: "white",
+  borderRadius: 10,
+  padding: "10px 14px",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+};
