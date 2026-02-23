@@ -101,7 +101,7 @@ export function StyleTab() {
                   </div>
                 ))}
             </div>
-            {result.style_profile.preferred_connectors?.length > 0 && (
+            {result.style_profile.preferred_connectors && result.style_profile.preferred_connectors.length > 0 && (
               <div style={{ marginTop: 10 }}>
                 <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Bevorzugte Konnektoren</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
