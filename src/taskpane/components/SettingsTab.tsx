@@ -1,44 +1,56 @@
 import React, { useState, useEffect } from "react";
-import { Button, Select, Label } from "@fluentui/react-components";
-import { loginWithOpenAI, logout, isLoggedIn } from "../services/openai";
+import { Button, Label } from "@fluentui/react-components";
+import { saveApiKey, clearApiKey, isConnected } from "../services/gemini";
 import { useStore } from "../store";
 
 export function SettingsTab() {
-  const [connected, setConnected] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { mode, setMode, discipline, setDiscipline, citationStyle, setCitationStyle } = useStore();
+  var [connected, setConnected] = useState(false);
+  var [keyInput, setKeyInput] = useState("");
+  var [saving, setSaving] = useState(false);
+  var [error, setError] = useState<string | null>(null);
+  var [success, setSuccess] = useState(false);
+  var { mode, setMode, discipline, setDiscipline, citationStyle, setCitationStyle } = useStore();
 
   useEffect(function () {
     try {
-      setConnected(isLoggedIn());
+      setConnected(isConnected());
     } catch (e) {
       // Office not ready
     }
   }, []);
 
-  const handleLogin = async function () {
-    setLoading(true);
+  var handleSaveKey = function () {
+    var trimmed = keyInput.trim();
+    if (!trimmed) {
+      setError("Bitte einen API-Key eingeben.");
+      return;
+    }
+    setSaving(true);
     setError(null);
+    setSuccess(false);
     try {
-      await loginWithOpenAI();
+      saveApiKey(trimmed);
       setConnected(true);
+      setKeyInput("");
+      setSuccess(true);
+      setTimeout(function () { setSuccess(false); }, 3000);
     } catch (e) {
       setError((e as Error).message);
     }
-    setLoading(false);
+    setSaving(false);
   };
 
-  const handleLogout = function () {
-    logout();
+  var handleDisconnect = function () {
+    clearApiKey();
     setConnected(false);
+    setSuccess(false);
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Connection */}
+      {/* Gemini Connection */}
       <div>
-        <Label weight="semibold" style={{ fontSize: 13 }}>OpenAI-Verbindung</Label>
+        <Label weight="semibold" style={{ fontSize: 13 }}>Google Gemini API</Label>
         <div
           style={{
             marginTop: 8,
@@ -54,22 +66,42 @@ export function SettingsTab() {
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4caf50" }} />
                 <span style={{ fontSize: 13, fontWeight: 500, color: "#2e7d32" }}>Verbunden</span>
               </div>
-              <Button size="small" appearance="subtle" onClick={handleLogout}>
-                Abmelden
+              <Button size="small" appearance="subtle" onClick={handleDisconnect}>
+                Trennen
               </Button>
             </div>
           ) : (
             <div>
-              <Button appearance="primary" onClick={handleLogin} disabled={loading} style={{ width: "100%" }}>
-                {loading ? "Verbinde..." : "Mit OpenAI anmelden"}
-              </Button>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  type="password"
+                  placeholder="Gemini API-Key eingeben..."
+                  value={keyInput}
+                  onChange={function (e) { setKeyInput(e.target.value); }}
+                  onKeyDown={function (e) { if (e.key === "Enter") handleSaveKey(); }}
+                  style={{
+                    flex: 1,
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    border: "1px solid #ccc",
+                    fontSize: 12,
+                    outline: "none",
+                  }}
+                />
+                <Button appearance="primary" size="small" onClick={handleSaveKey} disabled={saving}>
+                  {saving ? "..." : "Speichern"}
+                </Button>
+              </div>
               <p style={{ fontSize: 11, color: "#888", margin: "8px 0 0", textAlign: "center" }}>
-                Öffnet ein Login-Fenster bei OpenAI
+                Kostenlos auf{" "}
+                <span style={{ color: "#0f6cbd", fontWeight: 500 }}>aistudio.google.com</span>
+                {" "}erstellen
               </p>
             </div>
           )}
         </div>
         {error ? <p style={{ fontSize: 12, color: "#d32f2f", margin: "6px 0 0" }}>{error}</p> : null}
+        {success ? <p style={{ fontSize: 12, color: "#2e7d32", margin: "6px 0 0" }}>API-Key gespeichert!</p> : null}
       </div>
 
       <div style={{ height: 1, background: "#e0e0e0" }} />
@@ -79,13 +111,13 @@ export function SettingsTab() {
         <Label weight="semibold" style={{ fontSize: 13 }}>Korrekturmodus</Label>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
           {(["soft", "standard", "strict"] as const).map(function (value) {
-            const labels: Record<string, { label: string; desc: string }> = {
+            var labels: Record<string, { label: string; desc: string }> = {
               soft: { label: "Sanft", desc: "Nur eindeutige Fehler" },
               standard: { label: "Standard", desc: "Fehler + Stilverbesserungen" },
               strict: { label: "Streng", desc: "Alles prüfen (Abschlussarbeiten)" },
             };
-            const opt = labels[value];
-            const isActive = mode === value;
+            var opt = labels[value];
+            var isActive = mode === value;
             return (
               <button
                 key={value}
@@ -132,7 +164,11 @@ export function SettingsTab() {
       <div style={{ display: "flex", gap: 12 }}>
         <div style={{ flex: 1 }}>
           <Label weight="semibold" size="small">Fachgebiet</Label>
-          <Select value={discipline} onChange={function (_, d) { setDiscipline(d.value); }} size="small" style={{ marginTop: 4 }}>
+          <select
+            value={discipline}
+            onChange={function (e) { setDiscipline(e.target.value); }}
+            style={{ width: "100%", marginTop: 4, padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 12 }}
+          >
             <option value="allgemein">Allgemein</option>
             <option value="jura">Jura</option>
             <option value="medizin">Medizin</option>
@@ -140,21 +176,25 @@ export function SettingsTab() {
             <option value="wirtschaft">Wirtschaft</option>
             <option value="geisteswissenschaften">Geisteswiss.</option>
             <option value="naturwissenschaften">Naturwiss.</option>
-          </Select>
+          </select>
         </div>
         <div style={{ flex: 1 }}>
           <Label weight="semibold" size="small">Zitierstil</Label>
-          <Select value={citationStyle} onChange={function (_, d) { setCitationStyle(d.value); }} size="small" style={{ marginTop: 4 }}>
+          <select
+            value={citationStyle}
+            onChange={function (e) { setCitationStyle(e.target.value); }}
+            style={{ width: "100%", marginTop: 4, padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", fontSize: 12 }}
+          >
             <option value="APA">APA</option>
             <option value="Harvard">Harvard</option>
             <option value="Chicago">Chicago</option>
             <option value="IEEE">IEEE</option>
-          </Select>
+          </select>
         </div>
       </div>
 
       <p style={{ fontSize: 10, color: "#bbb", textAlign: "center", margin: 0 }}>
-        SchreibAssistent Pro v1.0.0
+        SchreibAssistent Pro v1.0.0 — powered by Gemini
       </p>
     </div>
   );

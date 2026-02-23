@@ -1,13 +1,14 @@
-import { callChatGPT } from "../services/openai";
+import { callGemini } from "../services/gemini";
 import { LEGITIMACY_PROMPT } from "../services/prompts";
 import type { LegitimacyResult } from "../types";
 
 export async function checkLegitimacy(
   text: string,
-  citationStyle: string = "APA"
+  citationStyle: string
 ): Promise<LegitimacyResult> {
-  return callChatGPT([
-    { role: "system", content: LEGITIMACY_PROMPT(citationStyle) },
+  var style = citationStyle || "APA";
+  return callGemini([
+    { role: "system", content: LEGITIMACY_PROMPT(style) },
     { role: "user", content: text },
   ]);
 }

@@ -11,15 +11,14 @@
   <ProviderName>SchreibAssistent Pro</ProviderName>
   <DefaultLocale>de-DE</DefaultLocale>
   <DisplayName DefaultValue="SchreibAssistent Pro" />
-  <Description DefaultValue="KI-gestützter Schreibassistent für deutsche Texte in Microsoft Word. Grammatikprüfung, Lektorat, Stilanalyse, Quellenprüfung und kontextbezogene Vorschläge – powered by OpenAI." />
+  <Description DefaultValue="KI-gestützter Schreibassistent für deutsche Texte in Microsoft Word. Grammatikprüfung, Lektorat, Stilanalyse, Quellenprüfung und kontextbezogene Vorschläge – powered by Google Gemini." />
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png" />
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png" />
   <SupportUrl DefaultValue="https://github.com/sucruf111/SchreibAssistentPro" />
 
   <AppDomains>
     <AppDomain>https://sucruf111.github.io</AppDomain>
-    <AppDomain>https://auth.openai.com</AppDomain>
-    <AppDomain>https://api.openai.com</AppDomain>
+    <AppDomain>https://generativelanguage.googleapis.com</AppDomain>
   </AppDomains>
 
   <Hosts>
