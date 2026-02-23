@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   FluentProvider,
   webLightTheme,
@@ -11,24 +11,22 @@ import { SourcesTab } from "./components/SourcesTab";
 import { StyleTab } from "./components/StyleTab";
 import { SuggestionsTab } from "./components/SuggestionsTab";
 import { SettingsTab } from "./components/SettingsTab";
-import { isLoggedIn } from "./services/openai";
 
 export default function App() {
   const [tab, setTab] = useState("correction");
   const [showSettings, setShowSettings] = useState(false);
-  const [connected, setConnected] = useState(false);
 
-  useEffect(() => {
-    try { setConnected(isLoggedIn()); } catch { /* ignore */ }
-    const interval = setInterval(() => {
-      try { setConnected(isLoggedIn()); } catch { /* ignore */ }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  let connected = false;
+  try {
+    const token = Office.context.roamingSettings.get("openai_token");
+    connected = !!token;
+  } catch (e) {
+    // Office not ready
+  }
 
   return (
     <FluentProvider theme={webLightTheme}>
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#f5f6fa" }}>
+      <div style={{ background: "#f5f6fa", minHeight: "100%" }}>
         {/* Header */}
         <div
           style={{
@@ -37,7 +35,6 @@ export default function App() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -62,22 +59,18 @@ export default function App() {
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* Status Dot */}
             <div
-              title={connected ? "Verbunden mit OpenAI" : "Nicht verbunden"}
+              title={connected ? "Verbunden" : "Nicht verbunden"}
               style={{
                 width: 8,
                 height: 8,
                 borderRadius: "50%",
                 background: connected ? "#4caf50" : "#ff5722",
-                boxShadow: connected ? "0 0 6px #4caf50" : "0 0 6px #ff5722",
-                cursor: "default",
               }}
             />
-            {/* Settings Button */}
             <button
               title="Einstellungen"
-              onClick={() => setShowSettings(!showSettings)}
+              onClick={function () { setShowSettings(!showSettings); }}
               style={{
                 background: showSettings ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
                 border: "none",
@@ -98,96 +91,88 @@ export default function App() {
         </div>
 
         {/* Settings Panel */}
-        {showSettings && (
-          <div style={{ padding: 16, background: "white", borderBottom: "1px solid #e8e8e8", boxShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>
-            <SettingsTab onConnectionChange={setConnected} />
+        {showSettings ? (
+          <div style={{ padding: 16, background: "white", borderBottom: "1px solid #e8e8e8" }}>
+            <SettingsTab />
           </div>
-        )}
+        ) : null}
 
         {/* Tab Navigation */}
         <div style={{ background: "white", borderBottom: "1px solid #e0e0e0", padding: "0 4px" }}>
           <TabList
             size="small"
             selectedValue={tab}
-            onTabSelect={(_, d) => setTab(d.value as string)}
+            onTabSelect={function (_, d) { setTab(d.value as string); }}
           >
-            <Tab value="correction" style={{ fontSize: 12, padding: "8px 8px" }}>
-              Korrektur
-            </Tab>
-            <Tab value="proofread" style={{ fontSize: 12, padding: "8px 8px" }}>
-              Lektorat
-            </Tab>
-            <Tab value="sources" style={{ fontSize: 12, padding: "8px 8px" }}>
-              Quellen
-            </Tab>
-            <Tab value="style" style={{ fontSize: 12, padding: "8px 8px" }}>
-              Stil
-            </Tab>
-            <Tab value="suggestions" style={{ fontSize: 12, padding: "8px 8px" }}>
-              Vorschläge
-            </Tab>
+            <Tab value="correction">Korrektur</Tab>
+            <Tab value="proofread">Lektorat</Tab>
+            <Tab value="sources">Quellen</Tab>
+            <Tab value="style">Stil</Tab>
+            <Tab value="suggestions">Vorschläge</Tab>
           </TabList>
         </div>
 
-        {/* Content Area */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-          {!connected && !showSettings && (
+        {/* Warning Banner */}
+        {!connected && !showSettings ? (
+          <div
+            style={{
+              margin: 16,
+              marginBottom: 0,
+              background: "#fff3e0",
+              border: "1px solid #ffe0b2",
+              borderRadius: 8,
+              padding: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
             <div
               style={{
-                background: "linear-gradient(135deg, #fff3e0, #fff8e1)",
-                border: "1px solid #ffe0b2",
-                borderRadius: 8,
-                padding: 12,
-                marginBottom: 12,
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                background: "#ff9800",
                 display: "flex",
                 alignItems: "center",
-                gap: 10,
+                justifyContent: "center",
+                color: "white",
+                fontSize: 14,
+                flexShrink: 0,
               }}
             >
-              <div
+              !
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "#e65100", fontWeight: 600 }}>
+                Nicht mit OpenAI verbunden
+              </div>
+              <button
+                onClick={function () { setShowSettings(true); }}
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  background: "#ff9800",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  fontSize: 16,
-                  flexShrink: 0,
+                  background: "none",
+                  border: "none",
+                  color: "#0f6cbd",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  padding: 0,
+                  marginTop: 2,
+                  fontWeight: 500,
                 }}
               >
-                !
-              </div>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontSize: 12, color: "#e65100", fontWeight: 600 }}>
-                  Nicht mit OpenAI verbunden
-                </span>
-                <br />
-                <button
-                  onClick={() => setShowSettings(true)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#0f6cbd",
-                    fontSize: 12,
-                    cursor: "pointer",
-                    padding: 0,
-                    marginTop: 2,
-                    fontWeight: 500,
-                  }}
-                >
-                  Einstellungen öffnen &rarr;
-                </button>
-              </div>
+                Einstellungen öffnen
+              </button>
             </div>
-          )}
-          {tab === "correction" && <CorrectionTab />}
-          {tab === "proofread" && <ProofreadTab />}
-          {tab === "sources" && <SourcesTab />}
-          {tab === "style" && <StyleTab />}
-          {tab === "suggestions" && <SuggestionsTab />}
+          </div>
+        ) : null}
+
+        {/* Content */}
+        <div style={{ padding: 16 }}>
+          {tab === "correction" ? <CorrectionTab /> : null}
+          {tab === "proofread" ? <ProofreadTab /> : null}
+          {tab === "sources" ? <SourcesTab /> : null}
+          {tab === "style" ? <StyleTab /> : null}
+          {tab === "suggestions" ? <SuggestionsTab /> : null}
         </div>
       </div>
     </FluentProvider>

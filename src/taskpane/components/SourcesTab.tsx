@@ -43,8 +43,8 @@ export function SourcesTab() {
     setLoading(false);
   };
 
-  const okCount = result?.citations.filter((c) => c.status === "ok").length || 0;
-  const issueCount = result?.citations.filter((c) => c.status !== "ok").length || 0;
+  const okCount = result ? result.citations.filter(function (c) { return c.status === "ok"; }).length : 0;
+  const issueCount = result ? result.citations.filter(function (c) { return c.status !== "ok"; }).length : 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
