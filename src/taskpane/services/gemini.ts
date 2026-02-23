@@ -1,21 +1,17 @@
-/* global Office */
-
 var GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
-// ---- API KEY STORAGE (Office Roaming Settings) ----
+// ---- API KEY STORAGE (localStorage) ----
 
 export function saveApiKey(key: string) {
-  Office.context.roamingSettings.set("gemini_api_key", key);
-  Office.context.roamingSettings.saveAsync();
+  localStorage.setItem("gemini_api_key", key);
 }
 
 export function getApiKey(): string | null {
-  return Office.context.roamingSettings.get("gemini_api_key") || null;
+  return localStorage.getItem("gemini_api_key") || null;
 }
 
 export function clearApiKey() {
-  Office.context.roamingSettings.remove("gemini_api_key");
-  Office.context.roamingSettings.saveAsync();
+  localStorage.removeItem("gemini_api_key");
 }
 
 export function isConnected(): boolean {
