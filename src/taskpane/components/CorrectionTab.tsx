@@ -2,20 +2,20 @@ import React, { useState } from "react";
 import { Button, Spinner, Text, Badge, Switch, Label } from "@fluentui/react-components";
 import { useStore } from "../store";
 import { checkGrammar } from "../modules/grammar";
-import { getSelection, extractDocument, markErrors, clearAnnotations } from "../services/wordApi";
+import { getSelection, extractDocument, markErrors, clearAnnotations, applyCorrection } from "../services/wordApi";
 import { chunkDocument } from "../services/chunker";
 import { analyzeChunks } from "../modules/analyzeChunks";
 import { GRAMMAR_PROMPT, GRAMMAR_MODE_EXTRA } from "../services/prompts";
 import { ChunkProgress } from "./ChunkProgress";
 import type { GrammarCorrection } from "../types";
 
-const severityColor: Record<string, "danger" | "warning" | "informative"> = {
+var severityColor: Record<string, "danger" | "warning" | "informative"> = {
   error: "danger",
   warning: "warning",
   info: "informative",
 };
 
-const typeLabels: Record<string, string> = {
+var typeLabels: Record<string, string> = {
   kasus: "Kasus",
   genus: "Genus",
   komma: "Komma",
@@ -27,54 +27,99 @@ const typeLabels: Record<string, string> = {
 };
 
 export function CorrectionTab() {
-  const { loading, setLoading, mode, setProgress, correctionsEnabled, setCorrectionsEnabled } = useStore();
-  const [corrections, setCorrections] = useState<GrammarCorrection[]>([]);
-  const [hasRun, setHasRun] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  var { loading, setLoading, mode, setProgress, correctionsEnabled, setCorrectionsEnabled } = useStore();
+  var [corrections, setCorrections] = useState<GrammarCorrection[]>([]);
+  var [applied, setApplied] = useState<Record<number, boolean>>({});
+  var [hasRun, setHasRun] = useState(false);
+  var [error, setError] = useState<string | null>(null);
 
-  const handleToggle = async (checked: boolean) => {
+  var handleToggle = async function (checked: boolean) {
     setCorrectionsEnabled(checked);
     if (!checked) {
       await clearAnnotations();
     } else if (corrections.length > 0) {
-      await markErrors(corrections);
+      await markErrors(corrections, true);
     }
   };
 
-  const handleCheck = async () => {
+  var handleApply = async function (c: GrammarCorrection, index: number) {
+    try {
+      var success = await applyCorrection(c.original, c.suggestion);
+      if (success) {
+        var newApplied: Record<number, boolean> = {};
+        for (var k in applied) {
+          newApplied[k] = applied[k];
+        }
+        newApplied[index] = true;
+        setApplied(newApplied);
+      } else {
+        setError("Text \"" + c.original + "\" wurde nicht im Dokument gefunden.");
+        setTimeout(function () { setError(null); }, 4000);
+      }
+    } catch (_e) {
+      setError("Korrektur konnte nicht angewendet werden.");
+      setTimeout(function () { setError(null); }, 4000);
+    }
+  };
+
+  var handleApplyAll = async function () {
+    var newApplied: Record<number, boolean> = {};
+    for (var k in applied) {
+      newApplied[k] = applied[k];
+    }
+    for (var i = 0; i < corrections.length; i++) {
+      if (newApplied[i]) continue;
+      try {
+        var success = await applyCorrection(corrections[i].original, corrections[i].suggestion);
+        if (success) {
+          newApplied[i] = true;
+        }
+      } catch (_e) {
+        // Skip failed corrections
+      }
+    }
+    setApplied(newApplied);
+  };
+
+  var handleCheck = async function () {
     setLoading(true);
     setError(null);
     setCorrections([]);
+    setApplied({});
     try {
       await clearAnnotations();
 
-      const selection = await getSelection();
+      var selection = await getSelection();
       if (selection && selection.trim().length > 0) {
-        const results = await checkGrammar(selection, mode);
+        var results = await checkGrammar(selection, mode);
         setCorrections(results);
         if (results.length > 0) await markErrors(results, correctionsEnabled);
       } else {
-        const paragraphs = await extractDocument();
-        const totalWords = paragraphs.reduce((s, p) => s + p.wordCount, 0);
+        var paragraphs = await extractDocument();
+        var totalWords = paragraphs.reduce(function (s, p) { return s + p.wordCount; }, 0);
 
         if (totalWords < 4000) {
-          const fullText = paragraphs.map((p) => p.text).join("\n\n");
-          const results = await checkGrammar(fullText, mode);
-          setCorrections(results);
-          if (results.length > 0) await markErrors(results, correctionsEnabled);
+          var fullText = paragraphs.map(function (p) { return p.text; }).join("\n\n");
+          var results2 = await checkGrammar(fullText, mode);
+          setCorrections(results2);
+          if (results2.length > 0) await markErrors(results2, correctionsEnabled);
         } else {
-          const { chunks, meta } = chunkDocument(paragraphs);
-          const systemPrompt = GRAMMAR_PROMPT + (GRAMMAR_MODE_EXTRA[mode] || "");
-          const chunkResults = await analyzeChunks(
-            chunks, meta, "grammar", systemPrompt,
-            (done, total) => setProgress({ done, total })
+          var chunkData = chunkDocument(paragraphs);
+          var systemPrompt = GRAMMAR_PROMPT + (GRAMMAR_MODE_EXTRA[mode] || "");
+          var chunkResults = await analyzeChunks(
+            chunkData.chunks, chunkData.meta, "grammar", systemPrompt,
+            function (done, total) { setProgress({ done: done, total: total }); }
           );
           setProgress(null);
 
-          const all: GrammarCorrection[] = [];
-          for (const r of chunkResults.values()) {
-            if (r.corrections) all.push(...r.corrections);
-          }
+          var all: GrammarCorrection[] = [];
+          chunkResults.forEach(function (r) {
+            if (r.corrections) {
+              for (var j = 0; j < r.corrections.length; j++) {
+                all.push(r.corrections[j]);
+              }
+            }
+          });
           setCorrections(all);
           if (all.length > 0) await markErrors(all, correctionsEnabled);
         }
@@ -86,9 +131,10 @@ export function CorrectionTab() {
     setLoading(false);
   };
 
-  const errorCount = corrections.filter((c) => c.severity === "error").length;
-  const warnCount = corrections.filter((c) => c.severity === "warning").length;
-  const infoCount = corrections.filter((c) => c.severity === "info").length;
+  var errorCount = corrections.filter(function (c) { return c.severity === "error"; }).length;
+  var warnCount = corrections.filter(function (c) { return c.severity === "warning"; }).length;
+  var infoCount = corrections.filter(function (c) { return c.severity === "info"; }).length;
+  var appliedCount = Object.keys(applied).length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -100,7 +146,7 @@ export function CorrectionTab() {
           </Button>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <Label size="small" style={{ color: "#888" }}>Markierungen</Label>
-            <Switch checked={correctionsEnabled} onChange={(_, data) => handleToggle(data.checked)} />
+            <Switch checked={correctionsEnabled} onChange={function (_, data) { handleToggle(data.checked); }} />
           </div>
         </div>
       </div>
@@ -113,22 +159,39 @@ export function CorrectionTab() {
         </div>
       )}
 
-      {/* Summary Stats */}
+      {/* Summary Stats + Apply All */}
       {hasRun && !error && corrections.length > 0 && (
-        <div style={{ ...cardStyle, display: "flex", gap: 0 }}>
-          {[
-            { count: errorCount, label: "Fehler", color: "#d32f2f" },
-            { count: warnCount, label: "Warnungen", color: "#f57c00" },
-            { count: infoCount, label: "Hinweise", color: "#1976d2" },
-          ].map((s, i) => (
-            <React.Fragment key={s.label}>
-              {i > 0 && <div style={{ width: 1, background: "#eee" }} />}
-              <div style={{ flex: 1, textAlign: "center" }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color: s.color }}>{s.count}</div>
-                <div style={{ fontSize: 10, color: "#888" }}>{s.label}</div>
-              </div>
-            </React.Fragment>
-          ))}
+        <div style={cardStyle}>
+          <div style={{ display: "flex", gap: 0, marginBottom: corrections.length > 0 ? 10 : 0 }}>
+            {[
+              { count: errorCount, label: "Fehler", color: "#d32f2f" },
+              { count: warnCount, label: "Warnungen", color: "#f57c00" },
+              { count: infoCount, label: "Hinweise", color: "#1976d2" },
+            ].map(function (s, i) {
+              return (
+                <React.Fragment key={s.label}>
+                  {i > 0 && <div style={{ width: 1, background: "#eee" }} />}
+                  <div style={{ flex: 1, textAlign: "center" }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: s.color }}>{s.count}</div>
+                    <div style={{ fontSize: 10, color: "#888" }}>{s.label}</div>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
+          {appliedCount < corrections.length ? (
+            <Button
+              appearance="primary"
+              onClick={handleApplyAll}
+              style={{ width: "100%", borderRadius: 8, fontWeight: 600, background: "#2e7d32" }}
+            >
+              Alle Korrekturen übernehmen ({corrections.length - appliedCount} offen)
+            </Button>
+          ) : (
+            <div style={{ textAlign: "center", fontSize: 12, color: "#2e7d32", fontWeight: 600 }}>
+              Alle Korrekturen übernommen!
+            </div>
+          )}
         </div>
       )}
 
@@ -140,33 +203,56 @@ export function CorrectionTab() {
       )}
 
       {/* Correction Cards */}
-      {corrections.map((c, i) => (
-        <div
-          key={i}
-          style={{
-            ...cardStyle,
-            borderLeft: `4px solid ${c.severity === "error" ? "#d32f2f" : c.severity === "warning" ? "#f57c00" : "#1976d2"}`,
-          }}
-        >
-          <Badge color={severityColor[c.severity]} size="small" style={{ fontSize: 10, marginBottom: 8 }}>
-            {typeLabels[c.type] || c.type}
-          </Badge>
-          <div style={{ fontSize: 12, color: "#999", textDecoration: "line-through", marginBottom: 2 }}>
-            {c.original}
+      {corrections.map(function (c, i) {
+        var isApplied = applied[i] === true;
+        return (
+          <div
+            key={i}
+            style={{
+              ...cardStyle,
+              borderLeft: "4px solid " + (isApplied ? "#4caf50" : c.severity === "error" ? "#d32f2f" : c.severity === "warning" ? "#f57c00" : "#1976d2"),
+              opacity: isApplied ? 0.6 : 1,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <Badge color={isApplied ? "success" : severityColor[c.severity]} size="small" style={{ fontSize: 10 }}>
+                {isApplied ? "Übernommen" : typeLabels[c.type] || c.type}
+              </Badge>
+              {!isApplied && (
+                <button
+                  onClick={function () { handleApply(c, i); }}
+                  style={{
+                    background: "#2e7d32",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "4px 10px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Übernehmen
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: "#999", textDecoration: "line-through", marginBottom: 2 }}>
+              {c.original}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#2e7d32" }}>
+              {c.suggestion}
+            </div>
+            <div style={{ fontSize: 11, color: "#666", marginTop: 6, lineHeight: 1.4 }}>
+              {c.explanation}
+            </div>
           </div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#2e7d32" }}>
-            {c.suggestion}
-          </div>
-          <div style={{ fontSize: 11, color: "#666", marginTop: 6, lineHeight: 1.4 }}>
-            {c.explanation}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
-const cardStyle: React.CSSProperties = {
+var cardStyle: React.CSSProperties = {
   background: "white",
   borderRadius: 10,
   padding: "10px 14px",
