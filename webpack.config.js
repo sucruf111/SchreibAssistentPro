@@ -37,7 +37,7 @@ module.exports = (env, argv) => {
         chunks: ["taskpane"],
       }),
     ],
-    devServer: {
+    devServer: isDev ? {
       static: {
         directory: path.join(__dirname, "dist"),
       },
@@ -53,7 +53,7 @@ module.exports = (env, argv) => {
       headers: {
         "Access-Control-Allow-Origin": "*",
       },
-    },
+    } : undefined,
     devtool: isDev ? "source-map" : false,
   };
 };
