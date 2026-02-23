@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, Spinner, Text, Badge } from "@fluentui/react-components";
+import { Button, Spinner, Text, Badge, Switch, Label } from "@fluentui/react-components";
 import { useStore } from "../store";
 import { checkGrammar } from "../modules/grammar";
 import { getSelection, extractDocument, markErrors, clearAnnotations } from "../services/wordApi";
@@ -27,10 +27,19 @@ const typeLabels: Record<string, string> = {
 };
 
 export function CorrectionTab() {
-  const { loading, setLoading, mode, setProgress } = useStore();
+  const { loading, setLoading, mode, setProgress, correctionsEnabled, setCorrectionsEnabled } = useStore();
   const [corrections, setCorrections] = useState<GrammarCorrection[]>([]);
   const [hasRun, setHasRun] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleToggle = async (checked: boolean) => {
+    setCorrectionsEnabled(checked);
+    if (!checked) {
+      await clearAnnotations();
+    } else if (corrections.length > 0) {
+      await markErrors(corrections);
+    }
+  };
 
   const handleCheck = async () => {
     setLoading(true);
@@ -44,7 +53,7 @@ export function CorrectionTab() {
       if (selection && selection.trim().length > 0) {
         const results = await checkGrammar(selection, mode);
         setCorrections(results);
-        if (results.length > 0) await markErrors(results);
+        if (results.length > 0) await markErrors(results, correctionsEnabled);
       } else {
         // Full document — may need chunking
         const paragraphs = await extractDocument();
@@ -54,7 +63,7 @@ export function CorrectionTab() {
           const fullText = paragraphs.map((p) => p.text).join("\n\n");
           const results = await checkGrammar(fullText, mode);
           setCorrections(results);
-          if (results.length > 0) await markErrors(results);
+          if (results.length > 0) await markErrors(results, correctionsEnabled);
         } else {
           // Large doc: chunk + parallel
           const { chunks, meta } = chunkDocument(paragraphs);
@@ -74,7 +83,7 @@ export function CorrectionTab() {
             if (r.corrections) all.push(...r.corrections);
           }
           setCorrections(all);
-          if (all.length > 0) await markErrors(all);
+          if (all.length > 0) await markErrors(all, correctionsEnabled);
         }
       }
       setHasRun(true);
@@ -86,9 +95,18 @@ export function CorrectionTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <Button appearance="primary" onClick={handleCheck} disabled={loading}>
-        {loading ? <Spinner size="tiny" /> : "Text prüfen"}
-      </Button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Button appearance="primary" onClick={handleCheck} disabled={loading}>
+          {loading ? <Spinner size="tiny" /> : "Text prüfen"}
+        </Button>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <Label size="small">Korrekturen</Label>
+          <Switch
+            checked={correctionsEnabled}
+            onChange={(_, data) => handleToggle(data.checked)}
+          />
+        </div>
+      </div>
 
       <ChunkProgress />
 

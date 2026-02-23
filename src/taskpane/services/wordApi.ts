@@ -27,10 +27,12 @@ export async function getSelection(): Promise<string> {
   });
 }
 
-/** Underline errors/warnings in the document. */
+/** Underline errors/warnings in the document. Skips marking if enabled is false. */
 export async function markErrors(
-  corrections: Array<{ original: string; severity: string }>
+  corrections: Array<{ original: string; severity: string }>,
+  enabled = true
 ) {
+  if (!enabled) return;
   return Word.run(async (ctx) => {
     const body = ctx.document.body;
     for (const c of corrections) {
