@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Button, Badge, Select, Label, Divider } from "@fluentui/react-components";
+import { Button, Select, Label } from "@fluentui/react-components";
 import { loginWithOpenAI, logout, isLoggedIn } from "../services/openai";
 import { useStore } from "../store";
 
@@ -14,9 +14,11 @@ export function SettingsTab({ onConnectionChange }: SettingsTabProps) {
   const { mode, setMode, discipline, setDiscipline, citationStyle, setCitationStyle } = useStore();
 
   useEffect(() => {
-    const status = isLoggedIn();
-    setConnected(status);
-    onConnectionChange?.(status);
+    try {
+      const status = isLoggedIn();
+      setConnected(status);
+      onConnectionChange?.(status);
+    } catch { /* Office not ready */ }
   }, []);
 
   const handleLogin = async () => {
@@ -93,7 +95,7 @@ export function SettingsTab({ onConnectionChange }: SettingsTabProps) {
         )}
       </div>
 
-      <Divider />
+      <div style={{ height: 1, background: "#e0e0e0" }} />
 
       {/* Correction Mode */}
       <div>
@@ -145,7 +147,7 @@ export function SettingsTab({ onConnectionChange }: SettingsTabProps) {
         </div>
       </div>
 
-      <Divider />
+      <div style={{ height: 1, background: "#e0e0e0" }} />
 
       {/* Discipline & Citation Style */}
       <div style={{ display: "flex", gap: 12 }}>

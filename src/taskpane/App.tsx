@@ -4,7 +4,6 @@ import {
   webLightTheme,
   Tab,
   TabList,
-  Tooltip,
 } from "@fluentui/react-components";
 import { CorrectionTab } from "./components/CorrectionTab";
 import { ProofreadTab } from "./components/ProofreadTab";
@@ -20,8 +19,10 @@ export default function App() {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    setConnected(isLoggedIn());
-    const interval = setInterval(() => setConnected(isLoggedIn()), 2000);
+    try { setConnected(isLoggedIn()); } catch { /* ignore */ }
+    const interval = setInterval(() => {
+      try { setConnected(isLoggedIn()); } catch { /* ignore */ }
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -61,38 +62,38 @@ export default function App() {
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Tooltip content={connected ? "Verbunden mit OpenAI" : "Nicht verbunden"} relationship="label">
-              <div
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: connected ? "#4caf50" : "#ff5722",
-                  boxShadow: connected ? "0 0 6px #4caf50" : "0 0 6px #ff5722",
-                }}
-              />
-            </Tooltip>
-            <Tooltip content="Einstellungen" relationship="label">
-              <button
-                onClick={() => setShowSettings(!showSettings)}
-                style={{
-                  background: showSettings ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
-                  border: "none",
-                  borderRadius: 6,
-                  width: 28,
-                  height: 28,
-                  cursor: "pointer",
-                  color: "white",
-                  fontSize: 15,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  transition: "background 0.2s",
-                }}
-              >
-                &#9881;
-              </button>
-            </Tooltip>
+            {/* Status Dot */}
+            <div
+              title={connected ? "Verbunden mit OpenAI" : "Nicht verbunden"}
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: connected ? "#4caf50" : "#ff5722",
+                boxShadow: connected ? "0 0 6px #4caf50" : "0 0 6px #ff5722",
+                cursor: "default",
+              }}
+            />
+            {/* Settings Button */}
+            <button
+              title="Einstellungen"
+              onClick={() => setShowSettings(!showSettings)}
+              style={{
+                background: showSettings ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
+                border: "none",
+                borderRadius: 6,
+                width: 28,
+                height: 28,
+                cursor: "pointer",
+                color: "white",
+                fontSize: 15,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              &#9881;
+            </button>
           </div>
         </div>
 
@@ -177,7 +178,7 @@ export default function App() {
                     fontWeight: 500,
                   }}
                 >
-                  Einstellungen öffnen →
+                  Einstellungen öffnen &rarr;
                 </button>
               </div>
             </div>
