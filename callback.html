@@ -1,0 +1,19 @@
+<!-- callback.html — host at your REDIRECT_URI (e.g. https://your-domain.com/callback.html) -->
+<!DOCTYPE html>
+<html lang="de">
+<body>
+  <p>Verbindung hergestellt. Dieses Fenster schließt sich gleich...</p>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script>
+    // Grab the auth code from the URL
+    var params = new URLSearchParams(window.location.search);
+    var code = params.get("code");
+    if (code) {
+      // Send it back to the Word Add-in
+      Office.onReady(function () {
+        Office.context.ui.messageParent(code);
+      });
+    }
+  </script>
+</body>
+</html>
