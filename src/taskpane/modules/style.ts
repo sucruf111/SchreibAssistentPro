@@ -1,5 +1,3 @@
-/* global Office */
-
 import { callGemini } from "../services/gemini";
 import { STYLE_ANALYSIS_PROMPT } from "../services/prompts";
 import type { StyleResult } from "../types";
@@ -11,14 +9,13 @@ export async function analyzeStyle(text: string): Promise<StyleResult> {
   ]);
 }
 
-// ---- Style Profile Persistence (Office Roaming Settings) ----
+// ---- Style Profile Persistence (localStorage) ----
 
 export function saveStyleProfile(profile: any) {
-  Office.context.roamingSettings.set("style_profile", JSON.stringify(profile));
-  Office.context.roamingSettings.saveAsync();
+  localStorage.setItem("style_profile", JSON.stringify(profile));
 }
 
 export function loadStyleProfile(): any | null {
-  var raw = Office.context.roamingSettings.get("style_profile");
+  var raw = localStorage.getItem("style_profile");
   return raw ? JSON.parse(raw) : null;
 }

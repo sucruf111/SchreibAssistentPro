@@ -16,12 +16,12 @@ export default function App() {
   const [tab, setTab] = useState("correction");
   const [showSettings, setShowSettings] = useState(false);
 
-  let connected = false;
+  var connected = false;
   try {
-    var key = Office.context.roamingSettings.get("gemini_api_key");
+    var key = localStorage.getItem("gemini_api_key");
     connected = !!key;
   } catch (e) {
-    // Office not ready
+    // localStorage not available
   }
 
   return (
