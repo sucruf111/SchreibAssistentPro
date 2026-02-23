@@ -18,8 +18,8 @@ export default function App() {
 
   let connected = false;
   try {
-    const token = Office.context.roamingSettings.get("openai_token");
-    connected = !!token;
+    var key = Office.context.roamingSettings.get("gemini_api_key");
+    connected = !!key;
   } catch (e) {
     // Office not ready
   }
@@ -145,7 +145,7 @@ export default function App() {
             </div>
             <div>
               <div style={{ fontSize: 12, color: "#e65100", fontWeight: 600 }}>
-                Nicht mit OpenAI verbunden
+                Kein Gemini API-Key hinterlegt
               </div>
               <button
                 onClick={function () { setShowSettings(true); }}

@@ -1,11 +1,11 @@
 /* global Office */
 
-import { callChatGPT } from "../services/openai";
+import { callGemini } from "../services/gemini";
 import { STYLE_ANALYSIS_PROMPT } from "../services/prompts";
 import type { StyleResult } from "../types";
 
 export async function analyzeStyle(text: string): Promise<StyleResult> {
-  return callChatGPT([
+  return callGemini([
     { role: "system", content: STYLE_ANALYSIS_PROMPT },
     { role: "user", content: text },
   ]);
@@ -19,6 +19,6 @@ export function saveStyleProfile(profile: any) {
 }
 
 export function loadStyleProfile(): any | null {
-  const raw = Office.context.roamingSettings.get("style_profile");
+  var raw = Office.context.roamingSettings.get("style_profile");
   return raw ? JSON.parse(raw) : null;
 }
