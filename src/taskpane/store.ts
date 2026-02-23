@@ -12,6 +12,10 @@ interface AppState {
   citationStyle: string;
   setCitationStyle: (s: string) => void;
 
+  // Correction toggle
+  correctionsEnabled: boolean;
+  setCorrectionsEnabled: (enabled: boolean) => void;
+
   // UI state
   loading: boolean;
   setLoading: (l: boolean) => void;
@@ -30,6 +34,9 @@ export const useStore = create<AppState>((set) => ({
 
   citationStyle: "APA",
   setCitationStyle: (citationStyle) => set({ citationStyle }),
+
+  correctionsEnabled: true,
+  setCorrectionsEnabled: (correctionsEnabled) => set({ correctionsEnabled }),
 
   loading: false,
   setLoading: (loading) => set({ loading }),
