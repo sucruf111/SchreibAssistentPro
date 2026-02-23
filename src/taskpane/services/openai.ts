@@ -1,7 +1,7 @@
 /* global Office */
 
 const OPENAI_CLIENT_ID = "your_client_id"; // From OpenAI dashboard
-const REDIRECT_URI = "https://your-domain.com/callback.html"; // Static callback page
+const REDIRECT_URI = "https://sucruf111.github.io/SchreibAssistentPro/callback.html"; // Static callback page
 const TOKEN_URL = "https://auth.openai.com/token";
 
 // ---- TOKEN STORAGE (Office Roaming Settings) ----

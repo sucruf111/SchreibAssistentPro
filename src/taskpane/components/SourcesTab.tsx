@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Button, Spinner, Text, Badge } from "@fluentui/react-components";
 import { useStore } from "../store";
+import { checkLegitimacy } from "../modules/legitimacy";
+import { getSelection, extractDocument } from "../services/wordApi";
 import type { LegitimacyResult } from "../types";
 
 const statusColor: Record<string, "success" | "warning" | "danger"> = {
@@ -10,11 +12,29 @@ const statusColor: Record<string, "success" | "warning" | "danger"> = {
 };
 
 export function SourcesTab() {
-  const { loading } = useStore();
+  const { loading, setLoading, citationStyle } = useStore();
   const [result, setResult] = useState<LegitimacyResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleCheck = async () => {
-    // Will be wired up in Phase 6
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const selection = await getSelection();
+      let text: string;
+      if (selection && selection.trim().length > 0) {
+        text = selection;
+      } else {
+        const paragraphs = await extractDocument();
+        text = paragraphs.map((p) => p.text).join("\n\n");
+      }
+      const res = await checkLegitimacy(text, citationStyle);
+      setResult(res);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setLoading(false);
   };
 
   return (
@@ -22,6 +42,8 @@ export function SourcesTab() {
       <Button appearance="primary" onClick={handleCheck} disabled={loading}>
         {loading ? <Spinner size="tiny" /> : "Quellen prüfen"}
       </Button>
+
+      {error && <Text style={{ color: "#d32f2f" }}>{error}</Text>}
 
       {result && (
         <>

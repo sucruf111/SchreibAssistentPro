@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Button, Spinner, Text } from "@fluentui/react-components";
 import { useStore } from "../store";
+import { analyzeStyle, saveStyleProfile, loadStyleProfile } from "../modules/style";
+import { getSelection, extractDocument } from "../services/wordApi";
 import type { StyleResult } from "../types";
 
 const profileLabels: Record<string, string> = {
@@ -13,11 +15,34 @@ const profileLabels: Record<string, string> = {
 };
 
 export function StyleTab() {
-  const { loading } = useStore();
+  const { loading, setLoading } = useStore();
   const [result, setResult] = useState<StyleResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const handleAnalyze = async () => {
-    // Will be wired up in Phase 7
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setSaved(false);
+    try {
+      const selection = await getSelection();
+      let text: string;
+      if (selection && selection.trim().length > 0) {
+        text = selection;
+      } else {
+        const paragraphs = await extractDocument();
+        text = paragraphs.map((p) => p.text).join("\n\n");
+      }
+      const res = await analyzeStyle(text);
+      setResult(res);
+      // Persist the style profile for use by suggestions module
+      saveStyleProfile(res.style_profile);
+      setSaved(true);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setLoading(false);
   };
 
   return (
@@ -25,6 +50,14 @@ export function StyleTab() {
       <Button appearance="primary" onClick={handleAnalyze} disabled={loading}>
         {loading ? <Spinner size="tiny" /> : "Stil analysieren"}
       </Button>
+
+      {error && <Text style={{ color: "#d32f2f" }}>{error}</Text>}
+
+      {saved && (
+        <Text size={200} style={{ color: "#4caf50" }}>
+          Stilprofil gespeichert — wird für Vorschläge verwendet.
+        </Text>
+      )}
 
       {result && (
         <>
