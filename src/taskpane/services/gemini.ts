@@ -58,6 +58,9 @@ export async function callGemini(
     generationConfig: {
       temperature: temp,
       responseMimeType: "application/json",
+      thinkingConfig: {
+        thinkingBudget: 0,
+      },
     },
   };
 
@@ -70,11 +73,25 @@ export async function callGemini(
   var retryDelay = 2000; // start with 2 seconds
 
   for (var attempt = 0; attempt < maxRetries; attempt++) {
-    var resp = await fetch(GEMINI_API_URL + "?key=" + apiKey, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: requestBody,
-    });
+    var resp: Response;
+    try {
+      // 60 second timeout to prevent Office WebView hanging
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function () { controller.abort(); }, 60000);
+      resp = await fetch(GEMINI_API_URL + "?key=" + apiKey, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (fetchErr) {
+      var errMsg = (fetchErr && (fetchErr as any).message) ? (fetchErr as any).message : "Unbekannter Netzwerkfehler";
+      if (errMsg.indexOf("abort") >= 0) {
+        throw new Error("Zeitüberschreitung: Gemini hat nicht rechtzeitig geantwortet. Bitte erneut versuchen.");
+      }
+      throw new Error("Netzwerkfehler: " + errMsg + ". Bitte Internetverbindung prüfen.");
+    }
 
     // Rate limit — wait and retry
     if (resp.status === 429) {
@@ -102,8 +119,31 @@ export async function callGemini(
     if (!resp.ok) throw new Error("Gemini Fehler: " + resp.status);
 
     var data = await resp.json();
-    var textContent = data.candidates[0].content.parts[0].text;
-    return JSON.parse(textContent);
+
+    // Robust response parsing: handle thinking model responses
+    // Thinking models return multiple parts — the JSON is in the non-thought part
+    var parts = data.candidates[0].content.parts;
+    var textContent = "";
+    for (var p = parts.length - 1; p >= 0; p--) {
+      if (parts[p].text && !parts[p].thought) {
+        textContent = parts[p].text;
+        break;
+      }
+    }
+    // Fallback: if no non-thought part found, use last part
+    if (!textContent && parts.length > 0) {
+      textContent = parts[parts.length - 1].text || "";
+    }
+
+    if (!textContent) {
+      throw new Error("Gemini hat eine leere Antwort zurückgegeben.");
+    }
+
+    try {
+      return JSON.parse(textContent);
+    } catch (_parseErr) {
+      throw new Error("Gemini Antwort konnte nicht verarbeitet werden.");
+    }
   }
 
   throw new Error("Gemini Anfrage fehlgeschlagen nach mehreren Versuchen.");
