@@ -29,9 +29,18 @@ export function DocumentInfo() {
     });
   };
 
+  // Refresh on mount
   useEffect(function () {
     refresh();
   }, []);
+
+  // Also refresh when docInfo changes externally (e.g. from App selection handler)
+  var prevDocInfo = docInfo;
+  useEffect(function () {
+    if (docInfo && docInfo !== prevDocInfo) {
+      // docInfo was updated externally, no need to re-fetch
+    }
+  }, [docInfo]);
 
   if (!docInfo) {
     return (
