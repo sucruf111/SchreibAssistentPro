@@ -1,20 +1,25 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FluentProvider,
   webLightTheme,
   Tab,
   TabList,
 } from "@fluentui/react-components";
+import { useStore } from "./store";
+import { loadDocumentInfo } from "./services/wordApi";
 import { CorrectionTab } from "./components/CorrectionTab";
 import { ProofreadTab } from "./components/ProofreadTab";
 import { SourcesTab } from "./components/SourcesTab";
 import { StyleTab } from "./components/StyleTab";
 import { SuggestionsTab } from "./components/SuggestionsTab";
 import { SettingsTab } from "./components/SettingsTab";
+import { DocumentInfo } from "./components/DocumentInfo";
+import { QuickCheckPanel } from "./components/QuickCheckPanel";
 
 export default function App() {
-  const [tab, setTab] = useState("correction");
-  const [showSettings, setShowSettings] = useState(false);
+  var [tab, setTab] = useState("correction");
+  var [showSettings, setShowSettings] = useState(false);
+  var { docInfo, setDocInfo, setAnalysisScope, setAutoCheck } = useStore();
 
   var connected = false;
   try {
@@ -23,6 +28,20 @@ export default function App() {
   } catch (e) {
     // localStorage not available
   }
+
+  // On mount: check if text is selected (context menu trigger)
+  useEffect(function () {
+    loadDocumentInfo().then(function (info) {
+      setDocInfo(info);
+      if (info.hasSelection) {
+        setAnalysisScope("selection");
+        setTab("correction");
+        setAutoCheck(true);
+      }
+    }).catch(function () {
+      // Ignore errors on initial load
+    });
+  }, []);
 
   return (
     <FluentProvider theme={webLightTheme}>
@@ -97,27 +116,11 @@ export default function App() {
           </div>
         ) : null}
 
-        {/* Tab Navigation */}
-        <div style={{ background: "white", borderBottom: "1px solid #e0e0e0", padding: "0 4px" }}>
-          <TabList
-            size="small"
-            selectedValue={tab}
-            onTabSelect={function (_, d) { setTab(d.value as string); }}
-          >
-            <Tab value="correction">Korrektur</Tab>
-            <Tab value="proofread">Lektorat</Tab>
-            <Tab value="sources">Quellen</Tab>
-            <Tab value="style">Stil</Tab>
-            <Tab value="suggestions">Vorschläge</Tab>
-          </TabList>
-        </div>
-
         {/* Warning Banner */}
         {!connected && !showSettings ? (
           <div
             style={{
-              margin: 16,
-              marginBottom: 0,
+              margin: "12px 16px 0",
               background: "#fff3e0",
               border: "1px solid #ffe0b2",
               borderRadius: 8,
@@ -165,6 +168,27 @@ export default function App() {
             </div>
           </div>
         ) : null}
+
+        {/* Document Info Bar */}
+        <DocumentInfo />
+
+        {/* Quick Check Panel (visible when text is selected) */}
+        <QuickCheckPanel />
+
+        {/* Tab Navigation */}
+        <div style={{ background: "white", borderBottom: "1px solid #e0e0e0", padding: "0 4px" }}>
+          <TabList
+            size="small"
+            selectedValue={tab}
+            onTabSelect={function (_, d) { setTab(d.value as string); }}
+          >
+            <Tab value="correction">Korrektur</Tab>
+            <Tab value="proofread">Lektorat</Tab>
+            <Tab value="sources">Quellen</Tab>
+            <Tab value="style">Stil</Tab>
+            <Tab value="suggestions">Vorschläge</Tab>
+          </TabList>
+        </div>
 
         {/* Content */}
         <div style={{ padding: 16 }}>

@@ -2,49 +2,99 @@ import React, { useState } from "react";
 import { Button, Spinner, Text, Badge } from "@fluentui/react-components";
 import { useStore } from "../store";
 import { checkLegitimacy } from "../modules/legitimacy";
-import { getSelection, extractDocument } from "../services/wordApi";
+import { getSelection, extractDocument, extractChapters } from "../services/wordApi";
+import { chunkDocument } from "../services/chunker";
+import { analyzeChunks } from "../modules/analyzeChunks";
+import { ChunkProgress } from "./ChunkProgress";
 import type { LegitimacyResult } from "../types";
 
-const statusColor: Record<string, "success" | "warning" | "danger"> = {
+var statusColor: Record<string, "success" | "warning" | "danger"> = {
   ok: "success",
   warning: "warning",
   error: "danger",
 };
 
-const statusLabel: Record<string, string> = {
+var statusLabel: Record<string, string> = {
   ok: "OK",
   warning: "Warnung",
   error: "Fehler",
 };
 
-export function SourcesTab() {
-  const { loading, setLoading, citationStyle } = useStore();
-  const [result, setResult] = useState<LegitimacyResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+var SOURCES_SYSTEM_PROMPT = "Du bist ein Experte für wissenschaftliche Quellenprüfung. Analysiere den folgenden Text auf Zitierprobleme.\n\nAntworte NUR mit JSON:\n{\n  \"overall\": { \"style_detected\": \"string\", \"consistency_score\": number },\n  \"citations\": [\n    {\n      \"text\": \"Zitat oder Verweis im Text\",\n      \"status\": \"ok|warning|error\",\n      \"issues\": [\n        { \"type\": \"string\", \"description\": \"string\", \"suggestion\": \"string\" }\n      ]\n    }\n  ]\n}";
 
-  const handleCheck = async () => {
+export function SourcesTab() {
+  var { loading, setLoading, citationStyle, setProgress, analysisScope, docInfo, selectedChapters } = useStore();
+  var [result, setResult] = useState<LegitimacyResult | null>(null);
+  var [error, setError] = useState<string | null>(null);
+
+  var getTextForAnalysis = async function (): Promise<string> {
+    if (analysisScope === "selection") {
+      var selection = await getSelection();
+      if (selection && selection.trim().length > 0) {
+        return selection;
+      }
+    }
+
+    if (analysisScope === "chapters" && docInfo && selectedChapters.length > 0) {
+      var chapterInfos = [];
+      for (var i = 0; i < selectedChapters.length; i++) {
+        chapterInfos.push(docInfo.chapters[selectedChapters[i]]);
+      }
+      var chapterParagraphs = await extractChapters(chapterInfos);
+      return chapterParagraphs.map(function (p) { return p.text; }).join("\n\n");
+    }
+
+    return "";
+  };
+
+  var handleCheck = async function () {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const selection = await getSelection();
-      let text: string;
-      if (selection && selection.trim().length > 0) {
-        text = selection;
+      var scopeText = await getTextForAnalysis();
+
+      if (scopeText && scopeText.trim().length > 0) {
+        var words = scopeText.split(/\s+/).filter(function (w) { return w; });
+        if (words.length < 4000) {
+          var res = await checkLegitimacy(scopeText, citationStyle);
+          setResult(res);
+        } else {
+          var fakeParagraphs = [{ index: 0, text: scopeText, headingLevel: 0, wordCount: words.length }];
+          var chData = chunkDocument(fakeParagraphs);
+          var chResults = await analyzeChunks(
+            chData.chunks, chData.meta, "sources", SOURCES_SYSTEM_PROMPT,
+            function (done, total, chapterName) { setProgress({ done: done, total: total, chapterName: chapterName }); }
+          );
+          setProgress(null);
+          setResult(mergeSourcesResults(chResults));
+        }
       } else {
-        const paragraphs = await extractDocument();
-        text = paragraphs.map((p) => p.text).join("\n\n");
+        var paragraphs = await extractDocument();
+        var totalWords = paragraphs.reduce(function (s, p) { return s + p.wordCount; }, 0);
+
+        if (totalWords < 4000) {
+          var fullText = paragraphs.map(function (p) { return p.text; }).join("\n\n");
+          var res2 = await checkLegitimacy(fullText, citationStyle);
+          setResult(res2);
+        } else {
+          var chunkData = chunkDocument(paragraphs);
+          var chunkResults = await analyzeChunks(
+            chunkData.chunks, chunkData.meta, "sources", SOURCES_SYSTEM_PROMPT,
+            function (done, total, chapterName) { setProgress({ done: done, total: total, chapterName: chapterName }); }
+          );
+          setProgress(null);
+          setResult(mergeSourcesResults(chunkResults));
+        }
       }
-      const res = await checkLegitimacy(text, citationStyle);
-      setResult(res);
     } catch (e) {
       setError((e as Error).message);
     }
     setLoading(false);
   };
 
-  const okCount = result ? result.citations.filter(function (c) { return c.status === "ok"; }).length : 0;
-  const issueCount = result ? result.citations.filter(function (c) { return c.status !== "ok"; }).length : 0;
+  var okCount = result ? result.citations.filter(function (c) { return c.status === "ok"; }).length : 0;
+  var issueCount = result ? result.citations.filter(function (c) { return c.status !== "ok"; }).length : 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -53,6 +103,8 @@ export function SourcesTab() {
           {loading ? <Spinner size="tiny" /> : "Quellen prüfen"}
         </Button>
       </div>
+
+      <ChunkProgress />
 
       {error && (
         <div style={{ padding: 12, background: "#fde8e8", borderRadius: 8, border: "1px solid #f5c6c6" }}>
@@ -78,7 +130,7 @@ export function SourcesTab() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  border: `2px solid ${result.overall.consistency_score >= 70 ? "#4caf50" : "#ff9800"}`,
+                  border: "2px solid " + (result.overall.consistency_score >= 70 ? "#4caf50" : "#ff9800"),
                 }}
               >
                 <span style={{ fontSize: 16, fontWeight: 700, color: result.overall.consistency_score >= 70 ? "#2e7d32" : "#e65100" }}>
@@ -93,42 +145,76 @@ export function SourcesTab() {
           </div>
 
           {/* Citation Cards */}
-          {result.citations.map((c, i) => (
-            <div
-              key={i}
-              style={{
-                ...cardStyle,
-                borderLeft: `4px solid ${c.status === "ok" ? "#4caf50" : c.status === "warning" ? "#ff9800" : "#d32f2f"}`,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                <Badge color={statusColor[c.status]} size="small" style={{ fontSize: 10 }}>
-                  {statusLabel[c.status]}
-                </Badge>
-              </div>
-              <div style={{ fontSize: 12, fontStyle: "italic", color: "#555", marginBottom: 6, lineHeight: 1.4 }}>
-                "{c.text}"
-              </div>
-              {c.issues.map((issue, j) => (
-                <div key={j} style={{ fontSize: 11, padding: "4px 0", borderTop: j > 0 ? "1px solid #f0f0f0" : "none" }}>
-                  <span style={{ fontWeight: 600, color: "#555" }}>{issue.type}:</span>{" "}
-                  <span style={{ color: "#666" }}>{issue.description}</span>
-                  {issue.suggestion && (
-                    <div style={{ color: "#2e7d32", marginTop: 2, fontSize: 11 }}>
-                      Vorschlag: {issue.suggestion}
-                    </div>
-                  )}
+          {result.citations.map(function (c, i) {
+            return (
+              <div
+                key={i}
+                style={{
+                  ...cardStyle,
+                  borderLeft: "4px solid " + (c.status === "ok" ? "#4caf50" : c.status === "warning" ? "#ff9800" : "#d32f2f"),
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <Badge color={statusColor[c.status]} size="small" style={{ fontSize: 10 }}>
+                    {statusLabel[c.status]}
+                  </Badge>
                 </div>
-              ))}
-            </div>
-          ))}
+                <div style={{ fontSize: 12, fontStyle: "italic", color: "#555", marginBottom: 6, lineHeight: 1.4 }}>
+                  "{c.text}"
+                </div>
+                {c.issues.map(function (issue, j) {
+                  return (
+                    <div key={j} style={{ fontSize: 11, padding: "4px 0", borderTop: j > 0 ? "1px solid #f0f0f0" : "none" }}>
+                      <span style={{ fontWeight: 600, color: "#555" }}>{issue.type}:</span>{" "}
+                      <span style={{ color: "#666" }}>{issue.description}</span>
+                      {issue.suggestion && (
+                        <div style={{ color: "#2e7d32", marginTop: 2, fontSize: 11 }}>
+                          Vorschlag: {issue.suggestion}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </>
       )}
     </div>
   );
 }
 
-const cardStyle: React.CSSProperties = {
+function mergeSourcesResults(chunkResults: Map<string, any>): LegitimacyResult {
+  var allCitations: any[] = [];
+  var totalScore = 0;
+  var count = 0;
+  var detectedStyle = "";
+
+  chunkResults.forEach(function (r) {
+    if (r.citations) {
+      for (var i = 0; i < r.citations.length; i++) {
+        allCitations.push(r.citations[i]);
+      }
+    }
+    if (r.overall) {
+      totalScore += r.overall.consistency_score || 0;
+      count++;
+      if (!detectedStyle && r.overall.style_detected) {
+        detectedStyle = r.overall.style_detected;
+      }
+    }
+  });
+
+  return {
+    overall: {
+      style_detected: detectedStyle || "Unbekannt",
+      consistency_score: count > 0 ? Math.round(totalScore / count) : 0,
+    },
+    citations: allCitations,
+  };
+}
+
+var cardStyle: React.CSSProperties = {
   background: "white",
   borderRadius: 10,
   padding: "10px 14px",

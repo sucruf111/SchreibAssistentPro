@@ -3,11 +3,11 @@ import { ProgressBar } from "@fluentui/react-components";
 import { useStore } from "../store";
 
 export function ChunkProgress() {
-  const { progress } = useStore();
+  var progress = useStore().progress;
 
   if (!progress) return null;
 
-  const pct = progress.total > 0 ? progress.done / progress.total : 0;
+  var pct = progress.total > 0 ? progress.done / progress.total : 0;
 
   return (
     <div
@@ -25,6 +25,11 @@ export function ChunkProgress() {
         </span>
       </div>
       <ProgressBar value={pct} />
+      {progress.chapterName && (
+        <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>
+          Abschnitt {progress.done + 1}/{progress.total}: {progress.chapterName}
+        </div>
+      )}
     </div>
   );
 }

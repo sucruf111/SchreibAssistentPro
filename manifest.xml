@@ -7,7 +7,7 @@
   xsi:type="TaskPaneApp">
 
   <Id>a1b2c3d4-e5f6-7890-abcd-ef1234567890</Id>
-  <Version>1.0.0.0</Version>
+  <Version>1.1.0.0</Version>
   <ProviderName>SchreibAssistent Pro</ProviderName>
   <DefaultLocale>de-DE</DefaultLocale>
   <DisplayName DefaultValue="SchreibAssistent Pro" />
@@ -68,6 +68,26 @@
               </Group>
             </OfficeTab>
           </ExtensionPoint>
+          <ExtensionPoint xsi:type="ContextMenu">
+            <OfficeMenu id="ContextMenuText">
+              <Control xsi:type="Button" id="ContextCheckButton">
+                <Label resid="ContextMenu.Label" />
+                <Supertip>
+                  <Title resid="ContextMenu.Label" />
+                  <Description resid="ContextMenu.Tooltip" />
+                </Supertip>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16" />
+                  <bt:Image size="32" resid="Icon.32x32" />
+                  <bt:Image size="80" resid="Icon.80x80" />
+                </Icon>
+                <Action xsi:type="ShowTaskpane">
+                  <TaskpaneId>SchreibAssistentPane</TaskpaneId>
+                  <SourceLocation resid="Taskpane.Url" />
+                </Action>
+              </Control>
+            </OfficeMenu>
+          </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
     </Hosts>
@@ -86,10 +106,12 @@
         <bt:String id="GetStarted.Title" DefaultValue="SchreibAssistent Pro" />
         <bt:String id="CommandsGroup.Label" DefaultValue="SchreibAssistent" />
         <bt:String id="TaskpaneButton.Label" DefaultValue="SchreibAssistent Pro" />
+        <bt:String id="ContextMenu.Label" DefaultValue="Mit SchreibAssistent prüfen" />
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="KI-gestützter Schreibassistent für deutsche Texte." />
         <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Öffnet den SchreibAssistenten für Korrektur, Lektorat und Stilanalyse." />
+        <bt:String id="ContextMenu.Tooltip" DefaultValue="Markierten Text mit dem SchreibAssistenten prüfen und korrigieren." />
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

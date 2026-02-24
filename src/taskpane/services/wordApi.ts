@@ -1,6 +1,7 @@
 /* global Word */
 
 import type { DocParagraph } from "../types";
+import type { DocInfo, ChapterInfo } from "../store";
 
 /** Extract all paragraphs in one call. */
 export async function extractDocument(): Promise<DocParagraph[]> {
@@ -95,6 +96,84 @@ export async function insertAtCursor(text: string) {
     sel.insertText(text, Word.InsertLocation.replace);
     return ctx.sync();
   });
+}
+
+/** Load document info: word count, selection, chapters. */
+export async function loadDocumentInfo(): Promise<DocInfo> {
+  var paragraphs = await extractDocument();
+  var totalWords = 0;
+  for (var i = 0; i < paragraphs.length; i++) {
+    totalWords += paragraphs[i].wordCount;
+  }
+
+  // Detect chapters (heading level 1-2)
+  var chapters: ChapterInfo[] = [];
+  var currentChapter: ChapterInfo | null = null;
+  for (var j = 0; j < paragraphs.length; j++) {
+    var p = paragraphs[j];
+    if (p.headingLevel === 1 || p.headingLevel === 2) {
+      if (currentChapter) {
+        currentChapter.endIndex = j - 1;
+        chapters.push(currentChapter);
+      }
+      currentChapter = {
+        title: p.text || ("Abschnitt " + (chapters.length + 1)),
+        wordCount: 0,
+        startIndex: j,
+        endIndex: paragraphs.length - 1,
+      };
+    }
+    if (currentChapter) {
+      currentChapter.wordCount += p.wordCount;
+    }
+  }
+  if (currentChapter) {
+    currentChapter.endIndex = paragraphs.length - 1;
+    chapters.push(currentChapter);
+  }
+
+  // If no headings found, create one chapter for the whole doc
+  if (chapters.length === 0) {
+    chapters.push({
+      title: "Gesamtes Dokument",
+      wordCount: totalWords,
+      startIndex: 0,
+      endIndex: paragraphs.length - 1,
+    });
+  }
+
+  // Check selection
+  var selectedWords = 0;
+  var hasSelection = false;
+  try {
+    var selText = await getSelection();
+    if (selText && selText.trim().length > 0) {
+      hasSelection = true;
+      selectedWords = selText.split(/\s+/).filter(function (w) { return w; }).length;
+    }
+  } catch (_e) {
+    // No selection
+  }
+
+  return {
+    totalWords: totalWords,
+    selectedWords: selectedWords,
+    hasSelection: hasSelection,
+    chapters: chapters,
+  };
+}
+
+/** Extract paragraphs for specific chapter indices only. */
+export async function extractChapters(chapters: ChapterInfo[]): Promise<DocParagraph[]> {
+  var allParagraphs = await extractDocument();
+  var result: DocParagraph[] = [];
+  for (var i = 0; i < chapters.length; i++) {
+    var ch = chapters[i];
+    for (var j = ch.startIndex; j <= ch.endIndex && j < allParagraphs.length; j++) {
+      result.push(allParagraphs[j]);
+    }
+  }
+  return result;
 }
 
 /** Clear all underline formatting (reset). */
