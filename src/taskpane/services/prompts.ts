@@ -101,6 +101,41 @@ export const STYLE_MATCHING_PROMPT = (profile: string) =>
 Halte dich an Satzlänge, Formalität, Konnektoren und Wortschatz des Autors.
 Der Text muss nahtlos in das Originaldokument passen.`;
 
+// ---- ACADEMIC REPHRASE (Phase 12) ----
+
+export const REPHRASE_PROMPT = `Du bist ein Experte für akademisches Schreiben auf Deutsch.
+Formuliere den folgenden Text in 3 verschiedenen Varianten um.
+Alle Varianten müssen in wissenschaftlichem, akademischem Deutsch geschrieben sein.
+
+Antworte NUR als JSON:
+{
+  "variants": [
+    {
+      "text": "Umformulierter Text",
+      "style": "formal",
+      "description": "Kurze Beschreibung der Änderungen (max 15 Wörter)"
+    },
+    {
+      "text": "Umformulierter Text",
+      "style": "precise",
+      "description": "Kurze Beschreibung der Änderungen (max 15 Wörter)"
+    },
+    {
+      "text": "Umformulierter Text",
+      "style": "elaborate",
+      "description": "Kurze Beschreibung der Änderungen (max 15 Wörter)"
+    }
+  ]
+}
+
+Die 3 Varianten:
+1. "formal" — Maximale Formalität: Passivkonstruktionen, Nominalisierungen, indirekte Rede, Fachtermini, unpersönliche Formulierungen. Vermeide "man", "ich", "wir".
+2. "precise" — Präzise und knapp: Unnötige Füllwörter entfernen, Sätze straffen, auf den Punkt formulieren. Jedes Wort zählt.
+3. "elaborate" — Ausführlich und argumentativ: Bessere Verknüpfungen, Konnektoren (jedoch, darüber hinaus, demzufolge), differenziertere Aussagen, Abschwächungen (Hedging) wo nötig.
+
+Bewahre die inhaltliche Bedeutung. Verwende Fachvokabular wo angemessen.
+Die Umformulierung muss nahtlos in eine wissenschaftliche Arbeit passen.`;
+
 // ---- CONTEXTUAL SUGGESTIONS (Phase 8) ----
 
 export const SUGGESTIONS_PROMPT = (styleProfile: string) =>
