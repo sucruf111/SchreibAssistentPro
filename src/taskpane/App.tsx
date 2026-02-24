@@ -8,10 +8,7 @@ import {
 import { useStore } from "./store";
 import { loadDocumentInfo, onSelectionChanged } from "./services/wordApi";
 import { CorrectionTab } from "./components/CorrectionTab";
-import { ProofreadTab } from "./components/ProofreadTab";
-import { SourcesTab } from "./components/SourcesTab";
 import { StyleTab } from "./components/StyleTab";
-import { SuggestionsTab } from "./components/SuggestionsTab";
 import { SettingsTab } from "./components/SettingsTab";
 import { DocumentInfo } from "./components/DocumentInfo";
 import { QuickCheckPanel } from "./components/QuickCheckPanel";
@@ -228,20 +225,14 @@ export default function App() {
             onTabSelect={function (_, d) { setTab(d.value as string); }}
           >
             <Tab value="correction">Korrektur</Tab>
-            <Tab value="proofread">Lektorat</Tab>
-            <Tab value="sources">Quellen</Tab>
             <Tab value="style">Stil</Tab>
-            <Tab value="suggestions">Vorschläge</Tab>
           </TabList>
         </div>
 
         {/* Content */}
         <div style={{ padding: 16 }}>
           {tab === "correction" ? <CorrectionTab /> : null}
-          {tab === "proofread" ? <ProofreadTab /> : null}
-          {tab === "sources" ? <SourcesTab /> : null}
           {tab === "style" ? <StyleTab /> : null}
-          {tab === "suggestions" ? <SuggestionsTab /> : null}
         </div>
       </div>
     </FluentProvider>

@@ -103,11 +103,11 @@ Der Text muss nahtlos in das Originaldokument passen.`;
 
 // ---- ACADEMIC REPHRASE (Phase 12) ----
 
-export const REPHRASE_PROMPT = `Du bist ein Experte für akademisches Schreiben auf Deutsch.
-Formuliere den folgenden Text in 3 verschiedenen Varianten um.
-Alle Varianten müssen in wissenschaftlichem, akademischem Deutsch geschrieben sein.
+export const REPHRASE_PROMPT = `Du bist ein behutsamer Lektor für deutsche akademische Texte.
 
-Antworte NUR als JSON:
+WICHTIG: Verändere den Text so WENIG wie möglich! Bewahre den Stil, die Wortwahl und die Satzstruktur des Autors. Korrigiere nur das, was wirklich verbessert werden muss. Der Autor soll seinen eigenen Text wiedererkennen.
+
+Erstelle 3 leicht unterschiedliche Varianten. Antworte NUR als JSON:
 {
   "variants": [
     {
@@ -128,13 +128,16 @@ Antworte NUR als JSON:
   ]
 }
 
-Die 3 Varianten:
-1. "formal" — Maximale Formalität: Passivkonstruktionen, Nominalisierungen, indirekte Rede, Fachtermini, unpersönliche Formulierungen. Vermeide "man", "ich", "wir".
-2. "precise" — Präzise und knapp: Unnötige Füllwörter entfernen, Sätze straffen, auf den Punkt formulieren. Jedes Wort zählt.
-3. "elaborate" — Ausführlich und argumentativ: Bessere Verknüpfungen, Konnektoren (jedoch, darüber hinaus, demzufolge), differenziertere Aussagen, Abschwächungen (Hedging) wo nötig.
+Die 3 Varianten — alle nah am Original:
+1. "formal" — Minimal formaler: Nur wo nötig Passiv statt Aktiv, einzelne umgangssprachliche Wendungen ersetzen. Maximal 10-15% des Textes ändern.
+2. "precise" — Minimal straffer: Nur offensichtliche Füllwörter entfernen, unnötige Wiederholungen kürzen. Satzstruktur des Autors beibehalten.
+3. "elaborate" — Minimal ausführlicher: Nur wo Übergänge fehlen einen Konnektor ergänzen, unklare Stellen leicht präzisieren.
 
-Bewahre die inhaltliche Bedeutung. Verwende Fachvokabular wo angemessen.
-Die Umformulierung muss nahtlos in eine wissenschaftliche Arbeit passen.`;
+Regeln:
+- Behalte den Schreibstil des Autors bei (Satzlänge, Wortwahl, Tonfall).
+- Ändere NICHT den gesamten Text um — nur gezielte, kleine Verbesserungen.
+- Wenn der Text bereits gut ist, gib ihn mit minimalen Änderungen zurück.
+- Die inhaltliche Bedeutung muss identisch bleiben.`;
 
 // ---- CONTEXTUAL SUGGESTIONS (Phase 8) ----
 
