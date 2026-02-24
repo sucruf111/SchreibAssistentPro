@@ -176,6 +176,18 @@ export async function extractChapters(chapters: ChapterInfo[]): Promise<DocParag
   return result;
 }
 
+/** Register a handler for document selection changes. */
+export function onSelectionChanged(callback: () => void): void {
+  try {
+    Office.context.document.addHandlerAsync(
+      Office.EventType.DocumentSelectionChanged,
+      function () { callback(); }
+    );
+  } catch (_e) {
+    // SelectionChanged event not supported on this platform
+  }
+}
+
 /** Clear all underline formatting (reset). */
 export async function clearAnnotations() {
   return Word.run(function (ctx) {

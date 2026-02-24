@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   FluentProvider,
   webLightTheme,
@@ -6,7 +6,7 @@ import {
   TabList,
 } from "@fluentui/react-components";
 import { useStore } from "./store";
-import { loadDocumentInfo } from "./services/wordApi";
+import { loadDocumentInfo, onSelectionChanged } from "./services/wordApi";
 import { CorrectionTab } from "./components/CorrectionTab";
 import { ProofreadTab } from "./components/ProofreadTab";
 import { SourcesTab } from "./components/SourcesTab";
@@ -19,7 +19,9 @@ import { QuickCheckPanel } from "./components/QuickCheckPanel";
 export default function App() {
   var [tab, setTab] = useState("correction");
   var [showSettings, setShowSettings] = useState(false);
-  var { docInfo, setDocInfo, setAnalysisScope, setAutoCheck } = useStore();
+  var [hasSelection, setHasSelection] = useState(false);
+  var { docInfo, setDocInfo, setAnalysisScope, setAutoCheck, loading } = useStore();
+  var selectionTimerRef = useRef<any>(null);
 
   var connected = false;
   try {
@@ -29,19 +31,39 @@ export default function App() {
     // localStorage not available
   }
 
-  // On mount: check if text is selected (context menu trigger)
-  useEffect(function () {
+  var refreshDocInfo = function () {
     loadDocumentInfo().then(function (info) {
       setDocInfo(info);
+      setHasSelection(info.hasSelection);
       if (info.hasSelection) {
         setAnalysisScope("selection");
-        setTab("correction");
-        setAutoCheck(true);
       }
     }).catch(function () {
-      // Ignore errors on initial load
+      // Ignore
+    });
+  };
+
+  // On mount: load doc info + register selection change handler
+  useEffect(function () {
+    refreshDocInfo();
+
+    // Register Office.js selection changed event
+    onSelectionChanged(function () {
+      // Debounce: wait 500ms after last selection change before refreshing
+      if (selectionTimerRef.current) {
+        clearTimeout(selectionTimerRef.current);
+      }
+      selectionTimerRef.current = setTimeout(function () {
+        refreshDocInfo();
+      }, 500);
     });
   }, []);
+
+  var handleCheckSelection = function () {
+    setAnalysisScope("selection");
+    setTab("correction");
+    setAutoCheck(true);
+  };
 
   return (
     <FluentProvider theme={webLightTheme}>
@@ -78,6 +100,29 @@ export default function App() {
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* Selection Check Button */}
+            {hasSelection && connected && !loading && (
+              <button
+                onClick={handleCheckSelection}
+                title="Markierten Text prüfen"
+                style={{
+                  background: "#4caf50",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  color: "white",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <span style={{ fontSize: 13 }}>&#10003;</span>
+                Selektion prüfen
+              </button>
+            )}
             <div
               title={connected ? "Verbunden" : "Nicht verbunden"}
               style={{
