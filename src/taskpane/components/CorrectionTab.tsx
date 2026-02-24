@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button, Spinner, Text, Badge, Switch, Label } from "@fluentui/react-components";
 import { useStore } from "../store";
 import { checkGrammar } from "../modules/grammar";
-import { getSelection, extractDocument, markErrors, clearAnnotations, applyCorrection } from "../services/wordApi";
+import { getSelection, extractDocument, extractChapters, markErrors, clearAnnotations, applyCorrection } from "../services/wordApi";
 import { chunkDocument } from "../services/chunker";
 import { analyzeChunks } from "../modules/analyzeChunks";
 import { GRAMMAR_PROMPT, GRAMMAR_MODE_EXTRA } from "../services/prompts";
@@ -27,11 +27,19 @@ var typeLabels: Record<string, string> = {
 };
 
 export function CorrectionTab() {
-  var { loading, setLoading, mode, setProgress, correctionsEnabled, setCorrectionsEnabled } = useStore();
+  var { loading, setLoading, mode, setProgress, correctionsEnabled, setCorrectionsEnabled, analysisScope, docInfo, selectedChapters, autoCheck, setAutoCheck } = useStore();
   var [corrections, setCorrections] = useState<GrammarCorrection[]>([]);
   var [applied, setApplied] = useState<Record<number, boolean>>({});
   var [hasRun, setHasRun] = useState(false);
   var [error, setError] = useState<string | null>(null);
+
+  // Auto-check support (triggered by context menu)
+  useEffect(function () {
+    if (autoCheck) {
+      setAutoCheck(false);
+      handleCheck();
+    }
+  }, [autoCheck]);
 
   var handleToggle = async function (checked: boolean) {
     setCorrectionsEnabled(checked);
@@ -81,6 +89,26 @@ export function CorrectionTab() {
     setApplied(newApplied);
   };
 
+  var getTextForAnalysis = async function (): Promise<string> {
+    if (analysisScope === "selection") {
+      var selection = await getSelection();
+      if (selection && selection.trim().length > 0) {
+        return selection;
+      }
+    }
+
+    if (analysisScope === "chapters" && docInfo && selectedChapters.length > 0) {
+      var chapterInfos = [];
+      for (var i = 0; i < selectedChapters.length; i++) {
+        chapterInfos.push(docInfo.chapters[selectedChapters[i]]);
+      }
+      var chapterParagraphs = await extractChapters(chapterInfos);
+      return chapterParagraphs.map(function (p) { return p.text; }).join("\n\n");
+    }
+
+    return "";
+  };
+
   var handleCheck = async function () {
     setLoading(true);
     setError(null);
@@ -89,29 +117,23 @@ export function CorrectionTab() {
     try {
       await clearAnnotations();
 
-      var selection = await getSelection();
-      if (selection && selection.trim().length > 0) {
-        var results = await checkGrammar(selection, mode);
-        setCorrections(results);
-        if (results.length > 0) await markErrors(results, correctionsEnabled);
-      } else {
-        var paragraphs = await extractDocument();
-        var totalWords = paragraphs.reduce(function (s, p) { return s + p.wordCount; }, 0);
+      var scopeText = await getTextForAnalysis();
 
-        if (totalWords < 4000) {
-          var fullText = paragraphs.map(function (p) { return p.text; }).join("\n\n");
-          var results2 = await checkGrammar(fullText, mode);
-          setCorrections(results2);
-          if (results2.length > 0) await markErrors(results2, correctionsEnabled);
+      if (scopeText && scopeText.trim().length > 0) {
+        var words = scopeText.split(/\s+/).filter(function (w) { return w; });
+        if (words.length < 4000) {
+          var results = await checkGrammar(scopeText, mode);
+          setCorrections(results);
+          if (results.length > 0) await markErrors(results, correctionsEnabled);
         } else {
-          var chunkData = chunkDocument(paragraphs);
+          var fakeParagraphs = [{ index: 0, text: scopeText, headingLevel: 0, wordCount: words.length }];
+          var chunkData = chunkDocument(fakeParagraphs);
           var systemPrompt = GRAMMAR_PROMPT + (GRAMMAR_MODE_EXTRA[mode] || "");
           var chunkResults = await analyzeChunks(
             chunkData.chunks, chunkData.meta, "grammar", systemPrompt,
-            function (done, total) { setProgress({ done: done, total: total }); }
+            function (done, total, chapterName) { setProgress({ done: done, total: total, chapterName: chapterName }); }
           );
           setProgress(null);
-
           var all: GrammarCorrection[] = [];
           chunkResults.forEach(function (r) {
             if (r.corrections) {
@@ -122,6 +144,35 @@ export function CorrectionTab() {
           });
           setCorrections(all);
           if (all.length > 0) await markErrors(all, correctionsEnabled);
+        }
+      } else {
+        var paragraphs = await extractDocument();
+        var totalWords = paragraphs.reduce(function (s, p) { return s + p.wordCount; }, 0);
+
+        if (totalWords < 4000) {
+          var fullText = paragraphs.map(function (p) { return p.text; }).join("\n\n");
+          var results2 = await checkGrammar(fullText, mode);
+          setCorrections(results2);
+          if (results2.length > 0) await markErrors(results2, correctionsEnabled);
+        } else {
+          var chunkData2 = chunkDocument(paragraphs);
+          var systemPrompt2 = GRAMMAR_PROMPT + (GRAMMAR_MODE_EXTRA[mode] || "");
+          var chunkResults2 = await analyzeChunks(
+            chunkData2.chunks, chunkData2.meta, "grammar", systemPrompt2,
+            function (done, total, chapterName) { setProgress({ done: done, total: total, chapterName: chapterName }); }
+          );
+          setProgress(null);
+
+          var all2: GrammarCorrection[] = [];
+          chunkResults2.forEach(function (r) {
+            if (r.corrections) {
+              for (var j = 0; j < r.corrections.length; j++) {
+                all2.push(r.corrections[j]);
+              }
+            }
+          });
+          setCorrections(all2);
+          if (all2.length > 0) await markErrors(all2, correctionsEnabled);
         }
       }
       setHasRun(true);

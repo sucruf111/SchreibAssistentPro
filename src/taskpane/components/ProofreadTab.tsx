@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import { Button, Spinner, Text } from "@fluentui/react-components";
 import { useStore } from "../store";
 import { proofread } from "../modules/proofread";
-import { getSelection, extractDocument } from "../services/wordApi";
+import { getSelection, extractDocument, extractChapters } from "../services/wordApi";
 import { chunkDocument } from "../services/chunker";
 import { analyzeChunks } from "../modules/analyzeChunks";
 import { PROOFREADING_PROMPT } from "../services/prompts";
 import { ChunkProgress } from "./ChunkProgress";
 import type { ProofreadResult } from "../types";
 
-const categoryLabels: Record<string, string> = {
+var categoryLabels: Record<string, string> = {
   structure: "Struktur",
   argumentation: "Argumentation",
   precision: "Präzision",
@@ -17,7 +17,7 @@ const categoryLabels: Record<string, string> = {
   formal: "Formales",
 };
 
-const categoryIcons: Record<string, string> = {
+var categoryIcons: Record<string, string> = {
   structure: "\uD83C\uDFD7",
   argumentation: "\uD83D\uDCAC",
   precision: "\uD83C\uDFAF",
@@ -38,66 +38,70 @@ function scoreBg(score: number): string {
 }
 
 export function ProofreadTab() {
-  const { loading, setLoading, discipline, setProgress } = useStore();
-  const [result, setResult] = useState<ProofreadResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  var { loading, setLoading, discipline, setProgress, analysisScope, docInfo, selectedChapters } = useStore();
+  var [result, setResult] = useState<ProofreadResult | null>(null);
+  var [error, setError] = useState<string | null>(null);
 
-  const handleProofread = async () => {
+  var getTextForAnalysis = async function (): Promise<string> {
+    if (analysisScope === "selection") {
+      var selection = await getSelection();
+      if (selection && selection.trim().length > 0) {
+        return selection;
+      }
+    }
+
+    if (analysisScope === "chapters" && docInfo && selectedChapters.length > 0) {
+      var chapterInfos = [];
+      for (var i = 0; i < selectedChapters.length; i++) {
+        chapterInfos.push(docInfo.chapters[selectedChapters[i]]);
+      }
+      var chapterParagraphs = await extractChapters(chapterInfos);
+      return chapterParagraphs.map(function (p) { return p.text; }).join("\n\n");
+    }
+
+    return "";
+  };
+
+  var handleProofread = async function () {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const selection = await getSelection();
-      if (selection && selection.trim().length > 0) {
-        const res = await proofread(selection, discipline);
-        setResult(res);
-      } else {
-        const paragraphs = await extractDocument();
-        const totalWords = paragraphs.reduce((s, p) => s + p.wordCount, 0);
+      var scopeText = await getTextForAnalysis();
 
-        if (totalWords < 4000) {
-          const fullText = paragraphs.map((p) => p.text).join("\n\n");
-          const res = await proofread(fullText, discipline);
+      if (scopeText && scopeText.trim().length > 0) {
+        var words = scopeText.split(/\s+/).filter(function (w) { return w; });
+        if (words.length < 4000) {
+          var res = await proofread(scopeText, discipline);
           setResult(res);
         } else {
-          const { chunks, meta } = chunkDocument(paragraphs);
-          const systemPrompt = PROOFREADING_PROMPT(discipline, "wissenschaftliche Arbeit");
-          const chunkResults = await analyzeChunks(
-            chunks, meta, "proofread", systemPrompt,
-            (done, total) => setProgress({ done, total })
+          var fakeParagraphs = [{ index: 0, text: scopeText, headingLevel: 0, wordCount: words.length }];
+          var chData = chunkDocument(fakeParagraphs);
+          var sysPrompt = PROOFREADING_PROMPT(discipline, "wissenschaftliche Arbeit");
+          var chResults = await analyzeChunks(
+            chData.chunks, chData.meta, "proofread", sysPrompt,
+            function (done, total, chapterName) { setProgress({ done: done, total: total, chapterName: chapterName }); }
           );
           setProgress(null);
+          setResult(mergeProofreadResults(chResults));
+        }
+      } else {
+        var paragraphs = await extractDocument();
+        var totalWords = paragraphs.reduce(function (s, p) { return s + p.wordCount; }, 0);
 
-          const scoreKeys = ["structure", "argumentation", "precision", "conventions", "formal"] as const;
-          const merged: ProofreadResult = {
-            scores: {
-              structure: { score: 0, issues: [] },
-              argumentation: { score: 0, issues: [] },
-              precision: { score: 0, issues: [] },
-              conventions: { score: 0, issues: [] },
-              formal: { score: 0, issues: [] },
-            },
-            overall_score: 0,
-            summary: "",
-          };
-          let count = 0;
-          for (const r of chunkResults.values()) {
-            if (!r.scores) continue;
-            count++;
-            for (const key of scoreKeys) {
-              if (r.scores[key]) {
-                merged.scores[key].score += r.scores[key].score;
-                merged.scores[key].issues.push(...(r.scores[key].issues || []));
-              }
-            }
-            merged.overall_score += r.overall_score || 0;
-          }
-          if (count > 0) {
-            for (const key of scoreKeys) merged.scores[key].score = Math.round(merged.scores[key].score / count);
-            merged.overall_score = Math.round(merged.overall_score / count);
-          }
-          merged.summary = `Bewertung über ${count} Abschnitte gemittelt.`;
-          setResult(merged);
+        if (totalWords < 4000) {
+          var fullText = paragraphs.map(function (p) { return p.text; }).join("\n\n");
+          var res2 = await proofread(fullText, discipline);
+          setResult(res2);
+        } else {
+          var chunkData = chunkDocument(paragraphs);
+          var systemPrompt = PROOFREADING_PROMPT(discipline, "wissenschaftliche Arbeit");
+          var chunkResults = await analyzeChunks(
+            chunkData.chunks, chunkData.meta, "proofread", systemPrompt,
+            function (done, total, chapterName) { setProgress({ done: done, total: total, chapterName: chapterName }); }
+          );
+          setProgress(null);
+          setResult(mergeProofreadResults(chunkResults));
         }
       }
     } catch (e) {
@@ -136,7 +140,7 @@ export function ProofreadTab() {
                 alignItems: "center",
                 justifyContent: "center",
                 margin: "0 auto 8px",
-                border: `3px solid ${scoreColor(result.overall_score)}`,
+                border: "3px solid " + scoreColor(result.overall_score),
               }}
             >
               <span style={{ fontSize: 24, fontWeight: 700, color: scoreColor(result.overall_score) }}>
@@ -150,47 +154,92 @@ export function ProofreadTab() {
           </div>
 
           {/* Category Scores */}
-          {Object.entries(result.scores).map(([key, val]) => (
-            <div key={key} style={cardStyle}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 14 }}>{categoryIcons[key] || ""}</span>
-                  <Text weight="semibold" style={{ fontSize: 13 }}>{categoryLabels[key] || key}</Text>
+          {Object.entries(result.scores).map(function (entry) {
+            var key = entry[0];
+            var val = entry[1];
+            return (
+              <div key={key} style={cardStyle}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 14 }}>{categoryIcons[key] || ""}</span>
+                    <Text weight="semibold" style={{ fontSize: 13 }}>{categoryLabels[key] || key}</Text>
+                  </div>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: scoreColor(val.score) }}>
+                    {val.score}
+                  </span>
                 </div>
-                <span style={{ fontSize: 14, fontWeight: 700, color: scoreColor(val.score) }}>
-                  {val.score}
-                </span>
-              </div>
-              {/* Progress Bar */}
-              <div style={{ height: 6, background: "#eee", borderRadius: 3, overflow: "hidden" }}>
-                <div
-                  style={{
-                    height: 6,
-                    width: `${val.score}%`,
-                    background: scoreColor(val.score),
-                    borderRadius: 3,
-                    transition: "width 0.5s ease",
-                  }}
-                />
-              </div>
-              {val.issues.length > 0 && (
-                <div style={{ marginTop: 8 }}>
-                  {val.issues.map((issue, i) => (
-                    <div key={i} style={{ fontSize: 11, color: "#666", padding: "3px 0", borderTop: i > 0 ? "1px solid #f0f0f0" : "none" }}>
-                      {issue}
-                    </div>
-                  ))}
+                {/* Progress Bar */}
+                <div style={{ height: 6, background: "#eee", borderRadius: 3, overflow: "hidden" }}>
+                  <div
+                    style={{
+                      height: 6,
+                      width: val.score + "%",
+                      background: scoreColor(val.score),
+                      borderRadius: 3,
+                      transition: "width 0.5s ease",
+                    }}
+                  />
                 </div>
-              )}
-            </div>
-          ))}
+                {val.issues.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    {val.issues.map(function (issue, i) {
+                      return (
+                        <div key={i} style={{ fontSize: 11, color: "#666", padding: "3px 0", borderTop: i > 0 ? "1px solid #f0f0f0" : "none" }}>
+                          {issue}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </>
       )}
     </div>
   );
 }
 
-const cardStyle: React.CSSProperties = {
+function mergeProofreadResults(chunkResults: Map<string, any>): ProofreadResult {
+  var scoreKeys = ["structure", "argumentation", "precision", "conventions", "formal"];
+  var merged: ProofreadResult = {
+    scores: {
+      structure: { score: 0, issues: [] },
+      argumentation: { score: 0, issues: [] },
+      precision: { score: 0, issues: [] },
+      conventions: { score: 0, issues: [] },
+      formal: { score: 0, issues: [] },
+    },
+    overall_score: 0,
+    summary: "",
+  };
+  var count = 0;
+  chunkResults.forEach(function (r) {
+    if (!r.scores) return;
+    count++;
+    for (var k = 0; k < scoreKeys.length; k++) {
+      var key = scoreKeys[k];
+      if (r.scores[key]) {
+        (merged.scores as any)[key].score += r.scores[key].score;
+        var issues = r.scores[key].issues || [];
+        for (var j = 0; j < issues.length; j++) {
+          (merged.scores as any)[key].issues.push(issues[j]);
+        }
+      }
+    }
+    merged.overall_score += r.overall_score || 0;
+  });
+  if (count > 0) {
+    for (var k = 0; k < scoreKeys.length; k++) {
+      (merged.scores as any)[scoreKeys[k]].score = Math.round((merged.scores as any)[scoreKeys[k]].score / count);
+    }
+    merged.overall_score = Math.round(merged.overall_score / count);
+  }
+  merged.summary = "Bewertung über " + count + " Abschnitte gemittelt.";
+  return merged;
+}
+
+var cardStyle: React.CSSProperties = {
   background: "white",
   borderRadius: 10,
   padding: "10px 14px",

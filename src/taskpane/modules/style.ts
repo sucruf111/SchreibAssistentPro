@@ -9,13 +9,25 @@ export async function analyzeStyle(text: string): Promise<StyleResult> {
   ]);
 }
 
-// ---- Style Profile Persistence (localStorage) ----
+// ---- Style Profile Persistence (localStorage with timestamp) ----
 
 export function saveStyleProfile(profile: any) {
   localStorage.setItem("style_profile", JSON.stringify(profile));
+  localStorage.setItem("style_profile_date", new Date().toISOString());
 }
 
-export function loadStyleProfile(): any | null {
+export function loadStyleProfile(): { profile: any; date: string } | null {
   var raw = localStorage.getItem("style_profile");
-  return raw ? JSON.parse(raw) : null;
+  var date = localStorage.getItem("style_profile_date");
+  if (!raw) return null;
+  try {
+    return { profile: JSON.parse(raw), date: date || "" };
+  } catch (_e) {
+    return null;
+  }
+}
+
+export function clearStyleProfile() {
+  localStorage.removeItem("style_profile");
+  localStorage.removeItem("style_profile_date");
 }
