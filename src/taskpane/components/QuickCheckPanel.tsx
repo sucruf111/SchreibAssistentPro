@@ -1,15 +1,13 @@
-import React, { useState } from "react";
-import { Button, Spinner, Badge } from "@fluentui/react-components";
+import React, { useState, useEffect, useRef } from "react";
+import { Button, Spinner } from "@fluentui/react-components";
 import { useStore } from "../store";
 import { getSelection, applyCorrection, replaceSelection } from "../services/wordApi";
 import { checkGrammar } from "../modules/grammar";
-import { proofread } from "../modules/proofread";
 import { rephraseText } from "../modules/rephrase";
-import type { GrammarCorrection, ProofreadResult, RephraseVariant } from "../types";
+import type { GrammarCorrection, RephraseVariant } from "../types";
 
 interface QuickResult {
   corrections: GrammarCorrection[];
-  proofreadResult: ProofreadResult | null;
 }
 
 var STYLE_LABELS: Record<string, string> = {
@@ -25,7 +23,7 @@ var STYLE_COLORS: Record<string, { bg: string; text: string; border: string }> =
 };
 
 export function QuickCheckPanel() {
-  var { docInfo, mode, discipline, loading, setLoading } = useStore();
+  var { docInfo, mode, loading, setLoading } = useStore();
   var [result, setResult] = useState<QuickResult | null>(null);
   var [applied, setApplied] = useState<Record<number, boolean>>({});
   var [error, setError] = useState<string | null>(null);
@@ -36,6 +34,27 @@ export function QuickCheckPanel() {
   var [rephraseRunning, setRephraseRunning] = useState(false);
   var [rephraseError, setRephraseError] = useState<string | null>(null);
   var [appliedVariant, setAppliedVariant] = useState<number | null>(null);
+
+  // Track previous selectedWords to detect selection change
+  var prevSelectedRef = useRef<number>(0);
+
+  // Reset all results when the selection changes
+  useEffect(function () {
+    if (!docInfo) return;
+    var currentWords = docInfo.selectedWords || 0;
+    if (prevSelectedRef.current !== currentWords) {
+      // Selection changed — clear old results
+      if (prevSelectedRef.current > 0) {
+        setResult(null);
+        setApplied({});
+        setError(null);
+        setRephraseVariants(null);
+        setRephraseError(null);
+        setAppliedVariant(null);
+      }
+      prevSelectedRef.current = currentWords;
+    }
+  }, [docInfo]);
 
   if (!docInfo || !docInfo.hasSelection) return null;
 
@@ -54,20 +73,8 @@ export function QuickCheckPanel() {
         return;
       }
 
-      // Run Grammar + Proofread in sequence (avoid 429)
       var corrections = await checkGrammar(selText, mode);
-
-      // Small delay to avoid rate limit
-      await new Promise(function (resolve) { setTimeout(resolve, 1500); });
-
-      var proofResult: ProofreadResult | null = null;
-      try {
-        proofResult = await proofread(selText, discipline);
-      } catch (_e) {
-        // Proofread optional, grammar is the priority
-      }
-
-      setResult({ corrections: corrections, proofreadResult: proofResult });
+      setResult({ corrections: corrections });
     } catch (e) {
       setError((e as Error).message);
     }
@@ -165,7 +172,7 @@ export function QuickCheckPanel() {
             disabled={running || rephraseRunning || loading}
             style={{ borderRadius: 8, fontWeight: 600 }}
           >
-            {running ? <Spinner size="tiny" /> : "Komplett-Check"}
+            {running ? <Spinner size="tiny" /> : "Grammatik-Check"}
           </Button>
         </div>
       </div>
@@ -186,7 +193,7 @@ export function QuickCheckPanel() {
       {rephraseVariants && rephraseVariants.length > 0 && (
         <div style={{ padding: "0 12px 10px" }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "#7b1fa2", marginBottom: 6 }}>
-            Akademische Varianten
+            Varianten
           </div>
           {rephraseVariants.map(function (variant, i) {
             var isAppliedV = appliedVariant === i;
@@ -235,7 +242,7 @@ export function QuickCheckPanel() {
                         cursor: "pointer",
                       }}
                     >
-                      \u00dcbernehmen
+                      {"\u00dcbernehmen"}
                     </button>
                   )}
                 </div>
@@ -287,10 +294,9 @@ export function QuickCheckPanel() {
         </div>
       )}
 
-      {/* Results */}
+      {/* Grammar Results */}
       {result && (
         <div style={{ padding: "0 12px 10px" }}>
-          {/* Grammar Summary */}
           {result.corrections.length > 0 ? (
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#333", marginBottom: 4 }}>
@@ -340,30 +346,6 @@ export function QuickCheckPanel() {
           ) : (
             <div style={{ fontSize: 11, color: "#2e7d32", fontWeight: 500, marginBottom: 6 }}>
               &#10003; Keine Grammatikfehler
-            </div>
-          )}
-
-          {/* Proofread Summary */}
-          {result.proofreadResult && (
-            <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#333", marginBottom: 4 }}>
-                Lektorat: {result.proofreadResult.overall_score}/100
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {["structure", "argumentation", "precision", "conventions", "formal"].map(function (key) {
-                  var scores = result && result.proofreadResult && result.proofreadResult.scores;
-                  if (!scores) return null;
-                  var s = (scores as any)[key];
-                  if (!s) return null;
-                  var color = s.score >= 80 ? "#2e7d32" : s.score >= 60 ? "#f57c00" : "#d32f2f";
-                  return (
-                    <div key={key} style={{ textAlign: "center", flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: color }}>{s.score}</div>
-                      <div style={{ fontSize: 8, color: "#888" }}>{key.slice(0, 4)}.</div>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           )}
         </div>
