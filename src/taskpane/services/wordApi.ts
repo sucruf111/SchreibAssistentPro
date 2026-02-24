@@ -176,6 +176,21 @@ export async function extractChapters(chapters: ChapterInfo[]): Promise<DocParag
   return result;
 }
 
+/** Replace the currently selected text with new text. More robust than applyCorrection for longer passages. */
+export async function replaceSelection(newText: string): Promise<boolean> {
+  return Word.run(async function (ctx) {
+    var sel = ctx.document.getSelection();
+    sel.load("text");
+    await ctx.sync();
+    if (sel.text && sel.text.trim().length > 0) {
+      sel.insertText(newText, Word.InsertLocation.replace);
+      await ctx.sync();
+      return true;
+    }
+    return false;
+  });
+}
+
 /** Register a handler for document selection changes. */
 export function onSelectionChanged(callback: () => void): void {
   try {

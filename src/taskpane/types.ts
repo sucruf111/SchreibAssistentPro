@@ -95,6 +95,18 @@ export interface SuggestionsResult {
   suggestions: Suggestion[];
 }
 
+// ---- Rephrase / Rewrite ----
+
+export interface RephraseVariant {
+  text: string;
+  style: "formal" | "precise" | "elaborate";
+  description: string;
+}
+
+export interface RephraseResult {
+  variants: RephraseVariant[];
+}
+
 // ---- Document Chunks ----
 
 export interface DocParagraph {
