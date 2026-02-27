@@ -8,6 +8,92 @@ import type { RewriteResult } from "../types";
 
 type ViewState = "idle" | "loading" | "result" | "applied";
 
+// ---- Simple word-level diff ----
+
+interface DiffSegment {
+  type: "equal" | "added" | "removed";
+  text: string;
+}
+
+function computeWordDiff(oldText: string, newText: string): DiffSegment[] {
+  var oldWords = oldText.split(/(\s+)/);
+  var newWords = newText.split(/(\s+)/);
+
+  // Build LCS table
+  var m = oldWords.length;
+  var n = newWords.length;
+
+  // For very long texts, fall back to simple display
+  if (m * n > 500000) {
+    return [
+      { type: "removed", text: oldText },
+      { type: "added", text: newText },
+    ];
+  }
+
+  var dp: number[][] = [];
+  for (var i = 0; i <= m; i++) {
+    dp[i] = [];
+    for (var j = 0; j <= n; j++) {
+      dp[i][j] = 0;
+    }
+  }
+  for (var i2 = 1; i2 <= m; i2++) {
+    for (var j2 = 1; j2 <= n; j2++) {
+      if (oldWords[i2 - 1] === newWords[j2 - 1]) {
+        dp[i2][j2] = dp[i2 - 1][j2 - 1] + 1;
+      } else {
+        dp[i2][j2] = dp[i2 - 1][j2] > dp[i2][j2 - 1] ? dp[i2 - 1][j2] : dp[i2][j2 - 1];
+      }
+    }
+  }
+
+  // Backtrack to build diff
+  var segments: DiffSegment[] = [];
+  var oi = m;
+  var ni = n;
+  var raw: Array<{ type: "equal" | "added" | "removed"; word: string }> = [];
+
+  while (oi > 0 || ni > 0) {
+    if (oi > 0 && ni > 0 && oldWords[oi - 1] === newWords[ni - 1]) {
+      raw.push({ type: "equal", word: oldWords[oi - 1] });
+      oi--;
+      ni--;
+    } else if (ni > 0 && (oi === 0 || dp[oi][ni - 1] >= dp[oi - 1][ni])) {
+      raw.push({ type: "added", word: newWords[ni - 1] });
+      ni--;
+    } else {
+      raw.push({ type: "removed", word: oldWords[oi - 1] });
+      oi--;
+    }
+  }
+
+  raw.reverse();
+
+  // Merge consecutive segments of the same type
+  for (var k = 0; k < raw.length; k++) {
+    var item = raw[k];
+    if (segments.length > 0 && segments[segments.length - 1].type === item.type) {
+      segments[segments.length - 1].text += item.word;
+    } else {
+      segments.push({ type: item.type, text: item.word });
+    }
+  }
+
+  return segments;
+}
+
+function countChanges(segments: DiffSegment[]): number {
+  var count = 0;
+  for (var i = 0; i < segments.length; i++) {
+    if (segments[i].type !== "equal") count++;
+  }
+  // Each removed+added pair counts as 1 change
+  return Math.ceil(count / 2);
+}
+
+// ---- Component ----
+
 export function RewriteTab() {
   var { docInfo, loading, setLoading } = useStore();
   var [viewState, setViewState] = useState<ViewState>("idle");
@@ -16,6 +102,7 @@ export function RewriteTab() {
   var [error, setError] = useState<string | null>(null);
   var [loadingStep, setLoadingStep] = useState("");
   var [selectionChanged, setSelectionChanged] = useState(false);
+  var [showFullOriginal, setShowFullOriginal] = useState(false);
 
   // Track selection changes without resetting results
   var prevSelectedRef = useRef<number>(0);
@@ -24,7 +111,6 @@ export function RewriteTab() {
     if (!docInfo) return;
     var currentWords = docInfo.selectedWords || 0;
     if (prevSelectedRef.current !== currentWords && prevSelectedRef.current > 0) {
-      // Selection changed — show banner instead of resetting
       if (viewState === "result" || viewState === "applied") {
         setSelectionChanged(true);
       }
@@ -41,6 +127,7 @@ export function RewriteTab() {
     setResult(null);
     setViewState("loading");
     setSelectionChanged(false);
+    setShowFullOriginal(false);
 
     try {
       var selText = await getSelection();
@@ -53,7 +140,6 @@ export function RewriteTab() {
 
       setOriginalText(selText);
 
-      // Check if style profile exists; if not, run analysis first
       var stored = loadStyleProfile();
       if (!stored || !stored.profile) {
         setLoadingStep("Analysiere Schreibstil...");
@@ -112,6 +198,7 @@ export function RewriteTab() {
     setError(null);
     setViewState("loading");
     setLoadingStep("Schreibe um...");
+    setShowFullOriginal(false);
     try {
       var rewriteResult = await rewriteText(originalText);
       setResult(rewriteResult);
@@ -129,13 +216,20 @@ export function RewriteTab() {
     handleRewrite();
   };
 
-  // No profile indicator
   var hasProfile = false;
   try {
     var stored2 = loadStyleProfile();
     hasProfile = !!(stored2 && stored2.profile);
   } catch (_e) {
     // ignore
+  }
+
+  // Compute diff when result is available
+  var diffSegments: DiffSegment[] = [];
+  var changeCount = 0;
+  if (result && originalText) {
+    diffSegments = computeWordDiff(originalText, result.rewritten_text);
+    changeCount = countChanges(diffSegments);
   }
 
   return (
@@ -273,48 +367,121 @@ export function RewriteTab() {
             ...cardStyle,
             borderLeft: "4px solid #1976d2",
           }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#1976d2", marginBottom: 4 }}>
-              \u00c4nderungen
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#1976d2" }}>
+                \u00c4nderungen
+              </div>
+              <span style={{
+                fontSize: 10,
+                padding: "1px 8px",
+                background: "#e3f2fd",
+                color: "#1565c0",
+                borderRadius: 10,
+                fontWeight: 600,
+              }}>
+                {changeCount} {changeCount === 1 ? "Stelle" : "Stellen"}
+              </span>
             </div>
             <div style={{ fontSize: 12, color: "#333", lineHeight: 1.5 }}>
               {result.changes_summary}
             </div>
           </div>
 
-          {/* Original Text */}
+          {/* Inline Diff View */}
           <div style={cardStyle}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#888", marginBottom: 6 }}>Original</div>
-            <div style={{
-              fontSize: 12,
-              color: "#666",
-              lineHeight: 1.6,
-              maxHeight: 200,
-              overflowY: "auto",
-              padding: "8px 10px",
-              background: "#f5f5f5",
-              borderRadius: 6,
-              whiteSpace: "pre-wrap",
-            }}>
-              {originalText}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#333" }}>Vorschau</div>
+              <div style={{ display: "flex", gap: 8, fontSize: 9, color: "#888" }}>
+                <span><span style={{ background: "#ffcdd2", padding: "0 3px", borderRadius: 2, textDecoration: "line-through" }}>entfernt</span></span>
+                <span><span style={{ background: "#c8e6c9", padding: "0 3px", borderRadius: 2 }}>neu</span></span>
+              </div>
             </div>
-          </div>
-
-          {/* Rewritten Text */}
-          <div style={cardStyle}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#1565c0", marginBottom: 6 }}>Umgeschrieben</div>
             <div style={{
               fontSize: 12,
               color: "#333",
-              lineHeight: 1.6,
-              maxHeight: 300,
+              lineHeight: 1.8,
+              maxHeight: 400,
               overflowY: "auto",
               padding: "8px 10px",
-              background: "#e3f2fd",
+              background: "#fafafa",
               borderRadius: 6,
               whiteSpace: "pre-wrap",
             }}>
-              {result.rewritten_text}
+              {diffSegments.map(function (seg, i) {
+                if (seg.type === "equal") {
+                  return <span key={i}>{seg.text}</span>;
+                }
+                if (seg.type === "removed") {
+                  return (
+                    <span
+                      key={i}
+                      style={{
+                        background: "#ffcdd2",
+                        color: "#b71c1c",
+                        textDecoration: "line-through",
+                        borderRadius: 2,
+                        padding: "0 1px",
+                      }}
+                    >
+                      {seg.text}
+                    </span>
+                  );
+                }
+                // added
+                return (
+                  <span
+                    key={i}
+                    style={{
+                      background: "#c8e6c9",
+                      color: "#1b5e20",
+                      borderRadius: 2,
+                      padding: "0 1px",
+                    }}
+                  >
+                    {seg.text}
+                  </span>
+                );
+              })}
             </div>
+          </div>
+
+          {/* Collapsible Full Original */}
+          <div style={cardStyle}>
+            <button
+              onClick={function () { setShowFullOriginal(!showFullOriginal); }}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                fontSize: 11,
+                color: "#888",
+                fontWeight: 500,
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                width: "100%",
+              }}
+            >
+              <span style={{ fontSize: 10 }}>{showFullOriginal ? "\u25BC" : "\u25B6"}</span>
+              Originaltext {showFullOriginal ? "ausblenden" : "anzeigen"}
+            </button>
+            {showFullOriginal && (
+              <div style={{
+                fontSize: 12,
+                color: "#666",
+                lineHeight: 1.6,
+                maxHeight: 200,
+                overflowY: "auto",
+                padding: "8px 10px",
+                background: "#f5f5f5",
+                borderRadius: 6,
+                whiteSpace: "pre-wrap",
+                marginTop: 8,
+              }}>
+                {originalText}
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
