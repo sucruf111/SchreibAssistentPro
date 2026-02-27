@@ -193,11 +193,25 @@ INHALTLICHE REGELN:
 - Die inhaltliche Bedeutung muss IDENTISCH bleiben
 - Keine neuen Informationen hinzufuegen
 
-Antworte NUR als JSON:
+AUSGABEFORMAT — Antworte NUR als JSON:
 {
-  "rewritten_text": "Der umgeschriebene Text",
-  "changes_summary": "Kurze Zusammenfassung der Aenderungen (2-3 Saetze, Deutsch)"
-}`;
+  "rewritten_text": "Der komplette umgeschriebene Text",
+  "changes_summary": "Kurze Zusammenfassung der Aenderungen (2-3 Saetze, Deutsch)",
+  "changes": [
+    {
+      "original": "exakte Originalstelle aus dem Input (copy-paste!)",
+      "replacement": "die neue Formulierung",
+      "reason": "Warum geaendert (kurz)"
+    }
+  ]
+}
+
+KRITISCH fuer "changes":
+- "original" muss EXAKT so im Eingabetext vorkommen (Wort fuer Wort, inkl. Satzzeichen)
+- Jede Aenderung einzeln auflisten — NICHT den ganzen Satz, nur die geaenderte Stelle
+- Wenn nur ein Komma eingefuegt wird: original="Wort1 Wort2", replacement="Wort1, Wort2"
+- Wenn ein Wort ersetzt wird: original="altes Wort", replacement="neues Wort"
+- Kontext minimal halten: nur so viele Woerter wie noetig fuer Eindeutigkeit (2-6 Woerter)`;
 
 export const REWRITE_PROMPT_NO_PROFILE = `Du bist ein behutsamer Ghostwriter fuer deutsche akademische Texte.
 Schreibe den Text akademisch besser, aber so, dass er natuerlich und menschlich klingt.
@@ -217,12 +231,26 @@ INHALTLICHE REGELN:
 - Die inhaltliche Bedeutung muss IDENTISCH bleiben
 - Keine neuen Informationen hinzufuegen
 
-Antworte NUR als JSON:
+AUSGABEFORMAT — Antworte NUR als JSON:
 {
-  "rewritten_text": "Der umgeschriebene Text",
+  "rewritten_text": "Der komplette umgeschriebene Text",
   "changes_summary": "Kurze Zusammenfassung der Aenderungen (2-3 Saetze, Deutsch)",
+  "changes": [
+    {
+      "original": "exakte Originalstelle aus dem Input (copy-paste!)",
+      "replacement": "die neue Formulierung",
+      "reason": "Warum geaendert (kurz)"
+    }
+  ],
   "style_note": "Hinweis: Fuer bessere Ergebnisse erstellen Sie ein Stilprofil in den Einstellungen. Dann wird der Text an Ihren persoenlichen Schreibstil angepasst."
-}`;
+}
+
+KRITISCH fuer "changes":
+- "original" muss EXAKT so im Eingabetext vorkommen (Wort fuer Wort, inkl. Satzzeichen)
+- Jede Aenderung einzeln auflisten — NICHT den ganzen Satz, nur die geaenderte Stelle
+- Wenn nur ein Komma eingefuegt wird: original="Wort1 Wort2", replacement="Wort1, Wort2"
+- Wenn ein Wort ersetzt wird: original="altes Wort", replacement="neues Wort"
+- Kontext minimal halten: nur so viele Woerter wie noetig fuer Eindeutigkeit (2-6 Woerter)`;
 
 // ---- CONTEXTUAL SUGGESTIONS (Phase 8) ----
 
