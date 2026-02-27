@@ -6,6 +6,7 @@ import { getSelection, extractDocument, extractChapters, markErrors, clearAnnota
 import { chunkDocument } from "../services/chunker";
 import { analyzeChunks } from "../modules/analyzeChunks";
 import { GRAMMAR_PROMPT, GRAMMAR_MODE_EXTRA } from "../services/prompts";
+import { useHoverHighlight } from "../hooks/useHoverHighlight";
 import { ChunkProgress } from "./ChunkProgress";
 import type { GrammarCorrection } from "../types";
 
@@ -36,6 +37,7 @@ export function CorrectionTab() {
   var [error, setError] = useState<string | null>(null);
   var [batchApplying, setBatchApplying] = useState(false);
   var [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
+  var hover = useHoverHighlight();
 
   // Auto-check support (triggered by context menu)
   useEffect(function () {
@@ -281,10 +283,13 @@ export function CorrectionTab() {
         return (
           <div
             key={i}
+            onMouseEnter={isApplied ? undefined : function () { hover.onMouseEnter(c.original); }}
+            onMouseLeave={isApplied ? undefined : hover.onMouseLeave}
             style={{
               ...cardStyle,
               borderLeft: "4px solid " + (isApplied ? "#4caf50" : c.severity === "error" ? "#d32f2f" : c.severity === "warning" ? "#f57c00" : "#1976d2"),
               opacity: isApplied ? 0.6 : 1,
+              cursor: isApplied ? undefined : "pointer",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>

@@ -5,6 +5,7 @@ import { getSelection, applyCorrection } from "../services/wordApi";
 import { rewriteText } from "../modules/rewrite";
 import { analyzeStyle, saveStyleProfile, loadStyleProfile } from "../modules/style";
 import type { RewriteResult, RewriteChange } from "../types";
+import { useHoverHighlight } from "../hooks/useHoverHighlight";
 
 type ViewState = "idle" | "loading" | "result" | "applied";
 
@@ -19,6 +20,7 @@ export function RewriteTab() {
   var [appliedChanges, setAppliedChanges] = useState<Record<number, boolean>>({});
   var [applyingAll, setApplyingAll] = useState(false);
   var [applyProgress, setApplyProgress] = useState({ done: 0, total: 0 });
+  var hover = useHoverHighlight();
 
   var prevSelectedRef = useRef<number>(0);
 
@@ -380,10 +382,13 @@ export function RewriteTab() {
             return (
               <div
                 key={i}
+                onMouseEnter={isApplied ? undefined : function () { hover.onMouseEnter(ch.original); }}
+                onMouseLeave={isApplied ? undefined : hover.onMouseLeave}
                 style={{
                   ...cardStyle,
                   borderLeft: "4px solid " + (isApplied ? "#4caf50" : "#1976d2"),
                   opacity: isApplied ? 0.6 : 1,
+                  cursor: isApplied ? undefined : "pointer",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
