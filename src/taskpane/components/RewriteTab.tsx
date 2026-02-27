@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Button, Spinner, Text } from "@fluentui/react-components";
 import { useStore } from "../store";
-import { getSelection, replaceTextInDocument } from "../services/wordApi";
+import { getSelection, applyCorrection } from "../services/wordApi";
 import { rewriteText } from "../modules/rewrite";
 import { analyzeStyle, saveStyleProfile, loadStyleProfile } from "../modules/style";
 import type { RewriteResult } from "../types";
@@ -92,6 +92,64 @@ function countChanges(segments: DiffSegment[]): number {
   return Math.ceil(count / 2);
 }
 
+// ---- Extract individual changes with context for targeted replacement ----
+
+interface TextChange {
+  searchText: string;
+  replacementText: string;
+}
+
+function extractChangesWithContext(segments: DiffSegment[]): TextChange[] {
+  var changes: TextChange[] = [];
+  var i = 0;
+
+  while (i < segments.length) {
+    if (segments[i].type === "equal") {
+      i++;
+      continue;
+    }
+
+    // Collect consecutive non-equal segments as one change group
+    var removedParts: string[] = [];
+    var addedParts: string[] = [];
+    var groupStart = i;
+
+    while (i < segments.length && segments[i].type !== "equal") {
+      if (segments[i].type === "removed") {
+        removedParts.push(segments[i].text);
+      } else if (segments[i].type === "added") {
+        addedParts.push(segments[i].text);
+      }
+      i++;
+    }
+
+    var removedText = removedParts.join("");
+    var addedText = addedParts.join("");
+
+    // Get surrounding context for unique matching in the document
+    var contextBefore = "";
+    var contextAfter = "";
+
+    if (groupStart > 0 && segments[groupStart - 1].type === "equal") {
+      var beforeText = segments[groupStart - 1].text;
+      // Take last ~40 chars
+      contextBefore = beforeText.length > 40 ? beforeText.slice(-40) : beforeText;
+    }
+    if (i < segments.length && segments[i].type === "equal") {
+      var afterText = segments[i].text;
+      // Take first ~40 chars
+      contextAfter = afterText.length > 40 ? afterText.slice(0, 40) : afterText;
+    }
+
+    changes.push({
+      searchText: contextBefore + removedText + contextAfter,
+      replacementText: contextBefore + addedText + contextAfter,
+    });
+  }
+
+  return changes;
+}
+
 // ---- Component ----
 
 export function RewriteTab() {
@@ -164,14 +222,34 @@ export function RewriteTab() {
   };
 
   var handleApply = async function () {
-    if (!result) return;
+    if (!result || diffSegments.length === 0) return;
     setLoading(true);
+    setError(null);
     try {
-      var success = await replaceTextInDocument(originalText, result.rewritten_text);
-      if (success) {
+      var changes = extractChangesWithContext(diffSegments);
+      var applied = 0;
+      var failed = 0;
+      for (var ci = 0; ci < changes.length; ci++) {
+        var ch = changes[ci];
+        if (ch.searchText === ch.replacementText) continue;
+        try {
+          var ok = await applyCorrection(ch.searchText, ch.replacementText);
+          if (ok) {
+            applied++;
+          } else {
+            failed++;
+          }
+        } catch (_e) {
+          failed++;
+        }
+      }
+      if (applied > 0) {
         setViewState("applied");
+        if (failed > 0) {
+          setError(failed + " von " + (applied + failed) + " \u00c4nderungen konnten nicht angewendet werden.");
+        }
       } else {
-        setError("Text konnte nicht ersetzt werden. Bitte markieren Sie den Text erneut.");
+        setError("Keine \u00c4nderungen konnten angewendet werden. Bitte markieren Sie den Text erneut.");
       }
     } catch (_e) {
       setError("Text konnte nicht ersetzt werden.");
@@ -180,15 +258,31 @@ export function RewriteTab() {
   };
 
   var handleUndo = async function () {
-    if (!result) return;
+    if (!result || diffSegments.length === 0) return;
     setLoading(true);
+    setError(null);
     try {
-      var success = await replaceTextInDocument(result.rewritten_text, originalText);
-      if (success) {
+      // Undo in reverse order
+      var changes = extractChangesWithContext(diffSegments);
+      var undone = 0;
+      for (var ci = changes.length - 1; ci >= 0; ci--) {
+        var ch = changes[ci];
+        if (ch.searchText === ch.replacementText) continue;
+        try {
+          // Reverse: search for replacement, put back original
+          var ok = await applyCorrection(ch.replacementText, ch.searchText);
+          if (ok) undone++;
+        } catch (_e) {
+          // skip
+        }
+      }
+      if (undone > 0) {
         setViewState("result");
+      } else {
+        setError("R\u00fcckg\u00e4ngig konnte nicht ausgef\u00fchrt werden.");
       }
     } catch (_e) {
-      setError("R\u00fcckgangig konnte nicht ausgef\u00fchrt werden.");
+      setError("R\u00fcckg\u00e4ngig konnte nicht ausgef\u00fchrt werden.");
     }
     setLoading(false);
   };
