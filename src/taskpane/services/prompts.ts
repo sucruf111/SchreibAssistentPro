@@ -16,6 +16,14 @@ Antworte NUR mit JSON:
   ]
 }
 
+KRITISCH fuer "original" und "suggestion":
+- "original" muss EXAKT so im Eingabetext vorkommen (Wort fuer Wort, inkl. Satzzeichen)
+- NUR die fehlerhafte Stelle — NICHT den ganzen Satz, nur das fehlerhafte Wort/die Phrase
+- Kontext minimal halten: nur so viele Woerter wie noetig fuer Eindeutigkeit (1-6 Woerter)
+- Beispiel Komma: original="Wort1 Wort2", suggestion="Wort1, Wort2"
+- Beispiel Wort: original="falsches Wort", suggestion="richtiges Wort"
+- "original" darf MAXIMAL 200 Zeichen lang sein
+
 Prüfe: Kasus nach Präpositionen, Genus-Kongruenz, Kommaregeln §71-79,
 Konjunktiv in indirekter Rede, dass/das, Zusammen-/Getrenntschreibung, Tempuskonsistenz.
 Wenn keine Fehler: {"corrections": []}`;

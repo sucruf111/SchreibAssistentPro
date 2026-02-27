@@ -89,6 +89,24 @@ export async function applyCorrection(original: string, replacement: string): Pr
   });
 }
 
+/** Select/highlight text in the document so the user can see where a correction applies. */
+export async function highlightTextInDocument(text: string): Promise<void> {
+  return Word.run(async function (ctx) {
+    var searchText = text.length > 255 ? text.slice(0, 255) : text;
+    var body = ctx.document.body;
+    var results = body.search(searchText, {
+      matchCase: false,
+      matchWholeWord: false,
+    });
+    results.load("items");
+    await ctx.sync();
+    if (results.items.length > 0) {
+      results.items[0].select();
+      await ctx.sync();
+    }
+  });
+}
+
 /** Insert text at the cursor position. */
 export async function insertAtCursor(text: string) {
   return Word.run(function (ctx) {
