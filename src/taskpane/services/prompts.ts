@@ -75,23 +75,47 @@ fehlende Quellen, plausible Jahreszahlen.`;
 
 // ---- STYLE ANALYSIS (Phase 7) ----
 
-export const STYLE_ANALYSIS_PROMPT = `Du bist ein Experte für deutsche Stilistik.
-Analysiere den Schreibstil. Antworte NUR als JSON:
+export const STYLE_ANALYSIS_PROMPT = `Du bist ein forensischer Textanalyst für deutsche akademische Texte.
+Analysiere den Schreibstil SEHR GENAU. Extrahiere NUR ECHTE Beispiele aus dem Text — erfinde NICHTS.
+
+Antworte NUR als JSON:
 {
   "style_profile": {
     "formality": "akademisch|fachlich|journalistisch|essayistisch|umgangssprachlich",
-    "voice": "distanziert|neutral|persönlich",
+    "voice": "distanziert|neutral|persoenlich",
     "sentence_length": "kurz|mittel|lang|sehr_lang",
     "complexity": "einfach|mittel|komplex",
     "passive_tendency": "niedrig|mittel|hoch",
-    "preferred_connectors": ["jedoch", "darüber hinaus"],
-    "vocabulary_level": "grundlegend|fachlich|hochspezialisiert"
+    "preferred_connectors": ["jedoch", "darueber hinaus", "..."],
+    "vocabulary_level": "grundlegend|fachlich|hochspezialisiert",
+    "characteristic_words": ["wort1", "wort2", "..."],
+    "characteristic_phrases": ["phrase1", "phrase2", "..."],
+    "typical_sentence_starters": ["Daraus ergibt sich", "Es zeigt sich", "..."],
+    "paragraph_transitions": ["Im Folgenden", "Vor diesem Hintergrund", "..."],
+    "punctuation_habits": {
+      "semicolons": "selten|gelegentlich|haeufig",
+      "dashes": "selten|gelegentlich|haeufig",
+      "parentheses": "selten|gelegentlich|haeufig",
+      "colons": "selten|gelegentlich|haeufig"
+    },
+    "avg_sentence_word_count": 18,
+    "sentence_length_variation": "gleichmaessig|leicht_variierend|stark_variierend",
+    "passive_ratio_percent": 25
   },
   "consistency": {
     "score": 0-100,
     "deviations": [{"location": "...", "issue": "...", "suggestion": "..."}]
   }
-}`;
+}
+
+WICHTIG:
+- "characteristic_words": 10-15 Woerter die der Autor TATSAECHLICH haeufig benutzt (aus dem Text extrahieren!)
+- "characteristic_phrases": 5-10 Mehrwort-Ausdruecke die typisch fuer diesen Autor sind
+- "typical_sentence_starters": 8-12 Satzanfaenge die der Autor bevorzugt
+- "paragraph_transitions": 5-10 Absatzuebergaenge/Konnektoren die der Autor nutzt
+- "avg_sentence_word_count": Durchschnittliche Woerter pro Satz (zaehle genau)
+- "passive_ratio_percent": Geschaetzter Prozentsatz passiver Saetze (0-100)
+- Alle Beispiele MUESSEN aus dem tatsaechlichen Text stammen!`;
 
 // ---- STYLE MATCHING (Phase 7) ----
 
@@ -101,43 +125,70 @@ export const STYLE_MATCHING_PROMPT = (profile: string) =>
 Halte dich an Satzlänge, Formalität, Konnektoren und Wortschatz des Autors.
 Der Text muss nahtlos in das Originaldokument passen.`;
 
-// ---- ACADEMIC REPHRASE (Phase 12) ----
+// ---- REWRITE WITH STYLE PROFILE ----
 
-export const REPHRASE_PROMPT = `Du bist ein behutsamer Lektor für deutsche akademische Texte.
+export const REWRITE_PROMPT = (styleProfileJson: string) =>
+  `Du bist ein unsichtbarer Ghostwriter fuer deutsche akademische Texte.
+Deine Aufgabe: Schreibe den Text so um, dass er besser klingt UND wie vom Originalautor geschrieben wirkt.
 
-WICHTIG: Verändere den Text so WENIG wie möglich! Bewahre den Stil, die Wortwahl und die Satzstruktur des Autors. Korrigiere nur das, was wirklich verbessert werden muss. Der Autor soll seinen eigenen Text wiedererkennen.
+STILPROFIL DES AUTORS:
+${styleProfileJson}
 
-Erstelle 3 leicht unterschiedliche Varianten. Antworte NUR als JSON:
+SCHREIBREGELN:
+1. Benutze AKTIV die "characteristic_words" und "characteristic_phrases" des Autors
+2. Beginne Saetze mit den "typical_sentence_starters" des Autors
+3. Halte die durchschnittliche Satzlaenge bei ca. "avg_sentence_word_count" Woertern
+4. Halte den Passiv-Anteil bei ca. "passive_ratio_percent"%
+5. Benutze die "preferred_connectors" fuer Uebergaenge
+6. Beachte die "punctuation_habits" des Autors
+
+ANTI-KI-ERKENNUNGSREGELN (SEHR WICHTIG):
+- KEINE perfekte Parallelitaet in Aufzaehlungen
+- KEINE uebermaessig glatten Uebergaenge — nicht jeder Satz braucht einen Konnektor
+- Absatzlaengen VARIIEREN (kurze und laengere Absaetze mischen)
+- Gelegentlich LAENGERE verschachtelte Saetze einbauen
+- Subtile Fuellwoerter erlaubt wenn der Autor sie nutzt ("dabei", "durchaus", "letztlich")
+- KEINE Formeln wie "Zusammenfassend laesst sich sagen", "Es ist festzuhalten", "Abschliessend sei bemerkt"
+- KEINE kuenstlich ausgewogenen Pro/Contra-Strukturen
+- Satzlaenge bewusst variieren (kurz-lang-mittel, nicht gleichmaessig)
+- Gelegentlich einen Satz mit "Und" oder "Doch" beginnen (wenn im Stilprofil)
+
+INHALTLICHE REGELN:
+- Alle Zitate, Verweise, Fussnoten, Quellenangaben UNVERAENDERT lassen
+- Fachbegriffe NICHT umschreiben oder vereinfachen
+- Die inhaltliche Bedeutung muss IDENTISCH bleiben
+- Keine neuen Informationen hinzufuegen
+
+Antworte NUR als JSON:
 {
-  "variants": [
-    {
-      "text": "Umformulierter Text",
-      "style": "formal",
-      "description": "Kurze Beschreibung der Änderungen (max 15 Wörter)"
-    },
-    {
-      "text": "Umformulierter Text",
-      "style": "precise",
-      "description": "Kurze Beschreibung der Änderungen (max 15 Wörter)"
-    },
-    {
-      "text": "Umformulierter Text",
-      "style": "elaborate",
-      "description": "Kurze Beschreibung der Änderungen (max 15 Wörter)"
-    }
-  ]
-}
+  "rewritten_text": "Der umgeschriebene Text",
+  "changes_summary": "Kurze Zusammenfassung der Aenderungen (2-3 Saetze, Deutsch)"
+}`;
 
-Die 3 Varianten — alle nah am Original:
-1. "formal" — Minimal formaler: Nur wo nötig Passiv statt Aktiv, einzelne umgangssprachliche Wendungen ersetzen. Maximal 10-15% des Textes ändern.
-2. "precise" — Minimal straffer: Nur offensichtliche Füllwörter entfernen, unnötige Wiederholungen kürzen. Satzstruktur des Autors beibehalten.
-3. "elaborate" — Minimal ausführlicher: Nur wo Übergänge fehlen einen Konnektor ergänzen, unklare Stellen leicht präzisieren.
+export const REWRITE_PROMPT_NO_PROFILE = `Du bist ein behutsamer Ghostwriter fuer deutsche akademische Texte.
+Schreibe den Text akademisch besser, aber so, dass er natuerlich und menschlich klingt.
 
-Regeln:
-- Behalte den Schreibstil des Autors bei (Satzlänge, Wortwahl, Tonfall).
-- Ändere NICHT den gesamten Text um — nur gezielte, kleine Verbesserungen.
-- Wenn der Text bereits gut ist, gib ihn mit minimalen Änderungen zurück.
-- Die inhaltliche Bedeutung muss identisch bleiben.`;
+ANTI-KI-ERKENNUNGSREGELN (SEHR WICHTIG):
+- KEINE perfekte Parallelitaet in Aufzaehlungen
+- KEINE uebermaessig glatten Uebergaenge zwischen jedem Satz
+- Absatzlaengen VARIIEREN
+- Gelegentlich laengere verschachtelte Saetze
+- Subtile Fuellwoerter sind OK ("dabei", "durchaus", "letztlich")
+- KEINE Formeln wie "Zusammenfassend laesst sich sagen" oder "Es bleibt festzuhalten"
+- Satzlaenge bewusst variieren
+- Natuerliche Unregelmaessigkeiten beibehalten
+
+INHALTLICHE REGELN:
+- Alle Zitate, Verweise und Fachbegriffe UNVERAENDERT lassen
+- Die inhaltliche Bedeutung muss IDENTISCH bleiben
+- Keine neuen Informationen hinzufuegen
+
+Antworte NUR als JSON:
+{
+  "rewritten_text": "Der umgeschriebene Text",
+  "changes_summary": "Kurze Zusammenfassung der Aenderungen (2-3 Saetze, Deutsch)",
+  "style_note": "Hinweis: Fuer bessere Ergebnisse erstellen Sie ein Stilprofil in den Einstellungen. Dann wird der Text an Ihren persoenlichen Schreibstil angepasst."
+}`;
 
 // ---- CONTEXTUAL SUGGESTIONS (Phase 8) ----
 
