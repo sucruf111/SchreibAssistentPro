@@ -11,7 +11,9 @@ export interface GrammarCorrection {
     | "konjunktiv"
     | "dass_das"
     | "zusammenschreibung"
-    | "tempus";
+    | "tempus"
+    | "wissenschaftlich"
+    | "stilbruch";
   explanation: string;
   severity: "error" | "warning" | "info";
 }
