@@ -203,14 +203,53 @@ export function onSelectionChanged(callback: () => void): void {
   }
 }
 
-/** Clear all underline formatting (reset). */
-export async function clearAnnotations() {
-  return Word.run(function (ctx) {
-    var body = ctx.document.body;
-    body.load("font");
-    return ctx.sync().then(function () {
-      body.font.underline = Word.UnderlineType.none;
-      return ctx.sync();
-    });
+/** Clear wave underlines only for specific corrections (preserves user formatting). */
+export async function clearAnnotations(corrections?: Array<{ original: string }>) {
+  return Word.run(async function (ctx) {
+    if (corrections && corrections.length > 0) {
+      var body = ctx.document.body;
+      for (var i = 0; i < corrections.length; i++) {
+        var c = corrections[i];
+        if (!c.original || c.original.trim().length === 0) continue;
+        try {
+          var results = body.search(c.original, {
+            matchCase: false,
+            matchWholeWord: false,
+          });
+          results.load("items/font");
+          await ctx.sync();
+          for (var j = 0; j < results.items.length; j++) {
+            var r = results.items[j];
+            if (r.font.underline === Word.UnderlineType.wave) {
+              r.font.underline = Word.UnderlineType.none;
+              r.font.underlineColor = "black";
+            }
+          }
+          await ctx.sync();
+        } catch (_e) {
+          // Skip text that can't be found
+        }
+      }
+    } else {
+      // Fallback: clear all wave underlines by searching the full body
+      var body2 = ctx.document.body;
+      body2.load("font");
+      await ctx.sync();
+      body2.font.underline = Word.UnderlineType.none;
+      await ctx.sync();
+    }
   });
+}
+
+/** Replace text in document. Tries replaceSelection first, falls back to search-and-replace. */
+export async function replaceTextInDocument(originalText: string, newText: string): Promise<boolean> {
+  // First try: replace current selection
+  try {
+    var selReplaced = await replaceSelection(newText);
+    if (selReplaced) return true;
+  } catch (_e) {
+    // Selection not available, fall through
+  }
+  // Fallback: search and replace
+  return applyCorrection(originalText, newText);
 }

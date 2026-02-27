@@ -59,6 +59,13 @@ export interface LegitimacyResult {
 
 // ---- Style Analysis ----
 
+export interface PunctuationHabits {
+  semicolons: "selten" | "gelegentlich" | "haeufig";
+  dashes: "selten" | "gelegentlich" | "haeufig";
+  parentheses: "selten" | "gelegentlich" | "haeufig";
+  colons: "selten" | "gelegentlich" | "haeufig";
+}
+
 export interface StyleProfile {
   formality: string;
   voice: string;
@@ -67,6 +74,15 @@ export interface StyleProfile {
   passive_tendency: string;
   preferred_connectors: string[];
   vocabulary_level: string;
+  // Enhanced fields (optional for backward compatibility)
+  characteristic_words?: string[];
+  characteristic_phrases?: string[];
+  typical_sentence_starters?: string[];
+  paragraph_transitions?: string[];
+  punctuation_habits?: PunctuationHabits;
+  avg_sentence_word_count?: number;
+  sentence_length_variation?: string;
+  passive_ratio_percent?: number;
 }
 
 export interface StyleDeviation {
@@ -95,16 +111,12 @@ export interface SuggestionsResult {
   suggestions: Suggestion[];
 }
 
-// ---- Rephrase / Rewrite ----
+// ---- Rewrite ----
 
-export interface RephraseVariant {
-  text: string;
-  style: "formal" | "precise" | "elaborate";
-  description: string;
-}
-
-export interface RephraseResult {
-  variants: RephraseVariant[];
+export interface RewriteResult {
+  rewritten_text: string;
+  changes_summary: string;
+  style_note?: string;
 }
 
 // ---- Document Chunks ----

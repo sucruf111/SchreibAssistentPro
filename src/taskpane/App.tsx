@@ -8,16 +8,15 @@ import {
 import { useStore } from "./store";
 import { loadDocumentInfo, onSelectionChanged } from "./services/wordApi";
 import { CorrectionTab } from "./components/CorrectionTab";
-import { StyleTab } from "./components/StyleTab";
+import { RewriteTab } from "./components/RewriteTab";
 import { SettingsTab } from "./components/SettingsTab";
 import { DocumentInfo } from "./components/DocumentInfo";
-import { QuickCheckPanel } from "./components/QuickCheckPanel";
 
 export default function App() {
   var [tab, setTab] = useState("correction");
   var [showSettings, setShowSettings] = useState(false);
   var [hasSelection, setHasSelection] = useState(false);
-  var { docInfo, setDocInfo, setAnalysisScope, setAutoCheck, loading } = useStore();
+  var { docInfo, setDocInfo, setAnalysisScope, loading } = useStore();
   var selectionTimerRef = useRef<any>(null);
 
   var connected = false;
@@ -56,12 +55,6 @@ export default function App() {
     });
   }, []);
 
-  var handleCheckSelection = function () {
-    setAnalysisScope("selection");
-    setTab("correction");
-    setAutoCheck(true);
-  };
-
   return (
     <FluentProvider theme={webLightTheme}>
       <div style={{ background: "#f5f6fa", minHeight: "100%" }}>
@@ -97,29 +90,6 @@ export default function App() {
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* Selection Check Button */}
-            {hasSelection && connected && !loading && (
-              <button
-                onClick={handleCheckSelection}
-                title="Markierten Text prüfen"
-                style={{
-                  background: "#4caf50",
-                  border: "none",
-                  borderRadius: 6,
-                  padding: "4px 10px",
-                  cursor: "pointer",
-                  color: "white",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <span style={{ fontSize: 13 }}>&#10003;</span>
-                Selektion prüfen
-              </button>
-            )}
             <div
               title={connected ? "Verbunden" : "Nicht verbunden"}
               style={{
@@ -205,7 +175,7 @@ export default function App() {
                   fontWeight: 500,
                 }}
               >
-                Einstellungen öffnen
+                Einstellungen {"\u00f6"}ffnen
               </button>
             </div>
           </div>
@@ -213,9 +183,6 @@ export default function App() {
 
         {/* Document Info Bar */}
         <DocumentInfo />
-
-        {/* Quick Check Panel (visible when text is selected) */}
-        <QuickCheckPanel />
 
         {/* Tab Navigation */}
         <div style={{ background: "white", borderBottom: "1px solid #e0e0e0", padding: "0 4px" }}>
@@ -225,14 +192,27 @@ export default function App() {
             onTabSelect={function (_, d) { setTab(d.value as string); }}
           >
             <Tab value="correction">Korrektur</Tab>
-            <Tab value="style">Stil</Tab>
+            <Tab value="rewrite">
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                Umschreiben
+                {hasSelection && tab !== "rewrite" && (
+                  <span style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: "#0f6cbd",
+                    display: "inline-block",
+                  }} />
+                )}
+              </span>
+            </Tab>
           </TabList>
         </div>
 
         {/* Content */}
         <div style={{ padding: 16 }}>
           {tab === "correction" ? <CorrectionTab /> : null}
-          {tab === "style" ? <StyleTab /> : null}
+          {tab === "rewrite" ? <RewriteTab /> : null}
         </div>
       </div>
     </FluentProvider>

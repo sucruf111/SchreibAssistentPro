@@ -32,6 +32,8 @@ export function CorrectionTab() {
   var [applied, setApplied] = useState<Record<number, boolean>>({});
   var [hasRun, setHasRun] = useState(false);
   var [error, setError] = useState<string | null>(null);
+  var [batchApplying, setBatchApplying] = useState(false);
+  var [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
 
   // Auto-check support (triggered by context menu)
   useEffect(function () {
@@ -44,7 +46,7 @@ export function CorrectionTab() {
   var handleToggle = async function (checked: boolean) {
     setCorrectionsEnabled(checked);
     if (!checked) {
-      await clearAnnotations();
+      await clearAnnotations(corrections);
     } else if (corrections.length > 0) {
       await markErrors(corrections, true);
     }
@@ -71,10 +73,14 @@ export function CorrectionTab() {
   };
 
   var handleApplyAll = async function () {
+    var remaining = corrections.filter(function (_, i) { return !applied[i]; });
+    setBatchApplying(true);
+    setBatchProgress({ done: 0, total: remaining.length });
     var newApplied: Record<number, boolean> = {};
     for (var k in applied) {
       newApplied[k] = applied[k];
     }
+    var doneCount = 0;
     for (var i = 0; i < corrections.length; i++) {
       if (newApplied[i]) continue;
       try {
@@ -85,8 +91,14 @@ export function CorrectionTab() {
       } catch (_e) {
         // Skip failed corrections
       }
+      doneCount++;
+      setBatchProgress({ done: doneCount, total: remaining.length });
+      // Update applied state after each correction for real-time card updates
+      var snapshot: Record<number, boolean> = {};
+      for (var j in newApplied) { snapshot[j] = newApplied[j]; }
+      setApplied(snapshot);
     }
-    setApplied(newApplied);
+    setBatchApplying(false);
   };
 
   var getTextForAnalysis = async function (): Promise<string> {
@@ -115,7 +127,7 @@ export function CorrectionTab() {
     setCorrections([]);
     setApplied({});
     try {
-      await clearAnnotations();
+      await clearAnnotations(corrections);
 
       var scopeText = await getTextForAnalysis();
 
@@ -234,9 +246,17 @@ export function CorrectionTab() {
             <Button
               appearance="primary"
               onClick={handleApplyAll}
+              disabled={batchApplying}
               style={{ width: "100%", borderRadius: 8, fontWeight: 600, background: "#2e7d32" }}
             >
-              Alle Korrekturen übernehmen ({corrections.length - appliedCount} offen)
+              {batchApplying ? (
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Spinner size="tiny" />
+                  <span>{batchProgress.done}/{batchProgress.total}...</span>
+                </span>
+              ) : (
+                "Alle Korrekturen \u00fcbernehmen (" + (corrections.length - appliedCount) + " offen)"
+              )}
             </Button>
           ) : (
             <div style={{ textAlign: "center", fontSize: 12, color: "#2e7d32", fontWeight: 600 }}>

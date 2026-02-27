@@ -205,6 +205,95 @@ export function StyleTab() {
                 </div>
               </div>
             )}
+
+            {/* Enhanced: Characteristic Words */}
+            {result.style_profile.characteristic_words && result.style_profile.characteristic_words.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Charakteristische W\u00f6rter</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {result.style_profile.characteristic_words.map(function (w, i) {
+                    return (
+                      <span key={i} style={{ fontSize: 11, padding: "2px 8px", background: "#f3e8fd", color: "#7b1fa2", borderRadius: 12 }}>
+                        {w}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Enhanced: Characteristic Phrases */}
+            {result.style_profile.characteristic_phrases && result.style_profile.characteristic_phrases.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Typische Redewendungen</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {result.style_profile.characteristic_phrases.map(function (p, i) {
+                    return (
+                      <span key={i} style={{ fontSize: 11, padding: "2px 8px", background: "#fce4ec", color: "#c62828", borderRadius: 12 }}>
+                        {p}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Enhanced: Sentence Starters */}
+            {result.style_profile.typical_sentence_starters && result.style_profile.typical_sentence_starters.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Typische Satzanf\u00e4nge</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {result.style_profile.typical_sentence_starters.map(function (s, i) {
+                    return (
+                      <span key={i} style={{ fontSize: 11, padding: "2px 8px", background: "#e8f5e9", color: "#2e7d32", borderRadius: 12 }}>
+                        {s}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Enhanced: Punctuation Habits */}
+            {result.style_profile.punctuation_habits && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>Zeichensetzung</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {[
+                    { key: "semicolons", label: "Semikola" },
+                    { key: "dashes", label: "Gedankenstriche" },
+                    { key: "parentheses", label: "Klammern" },
+                    { key: "colons", label: "Doppelpunkte" },
+                  ].map(function (item) {
+                    var val = (result!.style_profile.punctuation_habits as any)[item.key];
+                    if (!val) return null;
+                    return (
+                      <span key={item.key} style={{ fontSize: 10, padding: "2px 6px", background: "#f5f5f5", borderRadius: 6, color: "#555" }}>
+                        {item.label}: {val}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Enhanced: Numeric stats */}
+            {(result.style_profile.avg_sentence_word_count || result.style_profile.passive_ratio_percent !== undefined) && (
+              <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                {result.style_profile.avg_sentence_word_count && (
+                  <div style={{ flex: 1, padding: "6px 10px", background: "#f8f9fa", borderRadius: 6, textAlign: "center" }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "#333" }}>{result.style_profile.avg_sentence_word_count}</div>
+                    <div style={{ fontSize: 9, color: "#888" }}>W\u00f6rter/Satz</div>
+                  </div>
+                )}
+                {result.style_profile.passive_ratio_percent !== undefined && (
+                  <div style={{ flex: 1, padding: "6px 10px", background: "#f8f9fa", borderRadius: 6, textAlign: "center" }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "#333" }}>{result.style_profile.passive_ratio_percent}%</div>
+                    <div style={{ fontSize: 9, color: "#888" }}>Passiv</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Consistency Score - only show when freshly analyzed (not from cache) */}
