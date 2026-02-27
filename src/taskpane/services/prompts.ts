@@ -9,7 +9,7 @@ Antworte NUR mit JSON:
     {
       "original": "fehlerhafter Text",
       "suggestion": "korrigierter Text",
-      "type": "kasus|genus|komma|rechtschreibung|konjunktiv|dass_das|zusammenschreibung|tempus",
+      "type": "kasus|genus|komma|rechtschreibung|konjunktiv|dass_das|zusammenschreibung|tempus|wissenschaftlich|stilbruch",
       "explanation": "Deutsche Erklärung der Regel",
       "severity": "error|warning|info"
     }
@@ -25,6 +25,40 @@ export const GRAMMAR_MODE_EXTRA: Record<string, string> = {
   standard: "\nFehler und wichtige stilistische Verbesserungen.",
   strict: "\nALLES: Fehler, optionale Kommas, Füllwörter, Stilschwächen, Passiv.",
 };
+
+export function buildStrictExtra(styleProfileJson?: string): string {
+  var base = `
+ALLES prüfen: Fehler, optionale Kommas, Füllwörter, Stilschwächen, Passiv.
+
+ZUSÄTZLICH wissenschaftliche Formulierungen prüfen (type="wissenschaftlich"):
+- Umgangssprache in akademischem Text ("halt", "irgendwie", "quasi", "echt", "krass", "mega")
+- Zu informelle Formulierungen ("man kann sagen", "es ist klar dass")
+- Schwache Verben wo präzisere möglich wären ("machen" statt "durchführen/erstellen/bewirken")
+- Ich-Perspektive wenn distanzierte Perspektive erwartet wird
+- Fehlende Hedging-Ausdrücke bei unbelegten Behauptungen ("möglicherweise", "es scheint")
+- Umgangssprachliche Konnektoren ("und dann", "aber trotzdem")
+- Redundanzen und Pleonasmen ("bereits schon", "neue Innovation")
+- Nominalisierungen die den Text unnötig verkomplizieren`;
+
+  if (styleProfileJson) {
+    base += `
+
+ZUSÄTZLICH Stilprofil-Abgleich (type="stilbruch"):
+Das gespeicherte Stilprofil des Autors:
+${styleProfileJson}
+
+Prüfe ob der Text vom Stilprofil abweicht:
+- Satzlänge weicht stark von avg_sentence_word_count ab (zu kurz oder zu lang)
+- Formalitätsniveau passt nicht zum Profil (z.B. informell obwohl Profil "akademisch")
+- Passiv-Anteil weicht deutlich von passive_ratio_percent ab
+- Konnektoren/Übergänge die der Autor normalerweise NICHT benutzt
+- Vokabular-Niveau passt nicht zum Profil
+- Satzanfänge die untypisch für den Autor sind
+Severity für Stilbrüche: "info" (leichte Abweichung) oder "warning" (starke Abweichung)`;
+  }
+
+  return base;
+}
 
 // ---- SCIENTIFIC PROOFREADING (Phase 5) ----
 

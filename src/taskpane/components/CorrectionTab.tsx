@@ -24,6 +24,8 @@ var typeLabels: Record<string, string> = {
   dass_das: "dass/das",
   zusammenschreibung: "Zusammenschreibung",
   tempus: "Tempus",
+  wissenschaftlich: "Wissenschaftlich",
+  stilbruch: "Stilbruch",
 };
 
 export function CorrectionTab() {
