@@ -115,9 +115,16 @@ export interface SuggestionsResult {
 
 // ---- Rewrite ----
 
+export interface RewriteChange {
+  original: string;
+  replacement: string;
+  reason: string;
+}
+
 export interface RewriteResult {
   rewritten_text: string;
   changes_summary: string;
+  changes: RewriteChange[];
   style_note?: string;
 }
 

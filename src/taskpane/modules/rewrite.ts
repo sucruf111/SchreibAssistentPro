@@ -35,5 +35,10 @@ export async function rewriteText(text: string): Promise<RewriteResult> {
     throw new Error("Unerwartetes Antwortformat von Gemini.");
   }
 
+  // Ensure changes array exists
+  if (!result.changes || !Array.isArray(result.changes)) {
+    result.changes = [];
+  }
+
   return result as RewriteResult;
 }

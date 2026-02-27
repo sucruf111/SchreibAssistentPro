@@ -4,153 +4,9 @@ import { useStore } from "../store";
 import { getSelection, applyCorrection } from "../services/wordApi";
 import { rewriteText } from "../modules/rewrite";
 import { analyzeStyle, saveStyleProfile, loadStyleProfile } from "../modules/style";
-import type { RewriteResult } from "../types";
+import type { RewriteResult, RewriteChange } from "../types";
 
 type ViewState = "idle" | "loading" | "result" | "applied";
-
-// ---- Simple word-level diff ----
-
-interface DiffSegment {
-  type: "equal" | "added" | "removed";
-  text: string;
-}
-
-function computeWordDiff(oldText: string, newText: string): DiffSegment[] {
-  var oldWords = oldText.split(/(\s+)/);
-  var newWords = newText.split(/(\s+)/);
-
-  // Build LCS table
-  var m = oldWords.length;
-  var n = newWords.length;
-
-  // For very long texts, fall back to simple display
-  if (m * n > 500000) {
-    return [
-      { type: "removed", text: oldText },
-      { type: "added", text: newText },
-    ];
-  }
-
-  var dp: number[][] = [];
-  for (var i = 0; i <= m; i++) {
-    dp[i] = [];
-    for (var j = 0; j <= n; j++) {
-      dp[i][j] = 0;
-    }
-  }
-  for (var i2 = 1; i2 <= m; i2++) {
-    for (var j2 = 1; j2 <= n; j2++) {
-      if (oldWords[i2 - 1] === newWords[j2 - 1]) {
-        dp[i2][j2] = dp[i2 - 1][j2 - 1] + 1;
-      } else {
-        dp[i2][j2] = dp[i2 - 1][j2] > dp[i2][j2 - 1] ? dp[i2 - 1][j2] : dp[i2][j2 - 1];
-      }
-    }
-  }
-
-  // Backtrack to build diff
-  var segments: DiffSegment[] = [];
-  var oi = m;
-  var ni = n;
-  var raw: Array<{ type: "equal" | "added" | "removed"; word: string }> = [];
-
-  while (oi > 0 || ni > 0) {
-    if (oi > 0 && ni > 0 && oldWords[oi - 1] === newWords[ni - 1]) {
-      raw.push({ type: "equal", word: oldWords[oi - 1] });
-      oi--;
-      ni--;
-    } else if (ni > 0 && (oi === 0 || dp[oi][ni - 1] >= dp[oi - 1][ni])) {
-      raw.push({ type: "added", word: newWords[ni - 1] });
-      ni--;
-    } else {
-      raw.push({ type: "removed", word: oldWords[oi - 1] });
-      oi--;
-    }
-  }
-
-  raw.reverse();
-
-  // Merge consecutive segments of the same type
-  for (var k = 0; k < raw.length; k++) {
-    var item = raw[k];
-    if (segments.length > 0 && segments[segments.length - 1].type === item.type) {
-      segments[segments.length - 1].text += item.word;
-    } else {
-      segments.push({ type: item.type, text: item.word });
-    }
-  }
-
-  return segments;
-}
-
-function countChanges(segments: DiffSegment[]): number {
-  var count = 0;
-  for (var i = 0; i < segments.length; i++) {
-    if (segments[i].type !== "equal") count++;
-  }
-  // Each removed+added pair counts as 1 change
-  return Math.ceil(count / 2);
-}
-
-// ---- Extract individual changes with context for targeted replacement ----
-
-interface TextChange {
-  searchText: string;
-  replacementText: string;
-}
-
-function extractChangesWithContext(segments: DiffSegment[]): TextChange[] {
-  var changes: TextChange[] = [];
-  var i = 0;
-
-  while (i < segments.length) {
-    if (segments[i].type === "equal") {
-      i++;
-      continue;
-    }
-
-    // Collect consecutive non-equal segments as one change group
-    var removedParts: string[] = [];
-    var addedParts: string[] = [];
-    var groupStart = i;
-
-    while (i < segments.length && segments[i].type !== "equal") {
-      if (segments[i].type === "removed") {
-        removedParts.push(segments[i].text);
-      } else if (segments[i].type === "added") {
-        addedParts.push(segments[i].text);
-      }
-      i++;
-    }
-
-    var removedText = removedParts.join("");
-    var addedText = addedParts.join("");
-
-    // Get surrounding context for unique matching in the document
-    var contextBefore = "";
-    var contextAfter = "";
-
-    if (groupStart > 0 && segments[groupStart - 1].type === "equal") {
-      var beforeText = segments[groupStart - 1].text;
-      // Take last ~40 chars
-      contextBefore = beforeText.length > 40 ? beforeText.slice(-40) : beforeText;
-    }
-    if (i < segments.length && segments[i].type === "equal") {
-      var afterText = segments[i].text;
-      // Take first ~40 chars
-      contextAfter = afterText.length > 40 ? afterText.slice(0, 40) : afterText;
-    }
-
-    changes.push({
-      searchText: contextBefore + removedText + contextAfter,
-      replacementText: contextBefore + addedText + contextAfter,
-    });
-  }
-
-  return changes;
-}
-
-// ---- Component ----
 
 export function RewriteTab() {
   var { docInfo, loading, setLoading } = useStore();
@@ -160,9 +16,10 @@ export function RewriteTab() {
   var [error, setError] = useState<string | null>(null);
   var [loadingStep, setLoadingStep] = useState("");
   var [selectionChanged, setSelectionChanged] = useState(false);
-  var [showFullOriginal, setShowFullOriginal] = useState(false);
+  var [appliedChanges, setAppliedChanges] = useState<Record<number, boolean>>({});
+  var [applyingAll, setApplyingAll] = useState(false);
+  var [applyProgress, setApplyProgress] = useState({ done: 0, total: 0 });
 
-  // Track selection changes without resetting results
   var prevSelectedRef = useRef<number>(0);
 
   useEffect(function () {
@@ -185,7 +42,7 @@ export function RewriteTab() {
     setResult(null);
     setViewState("loading");
     setSelectionChanged(false);
-    setShowFullOriginal(false);
+    setAppliedChanges({});
 
     try {
       var selText = await getSelection();
@@ -205,7 +62,7 @@ export function RewriteTab() {
           var styleResult = await analyzeStyle(selText);
           saveStyleProfile(styleResult.style_profile);
         } catch (_e) {
-          // Style analysis failed — proceed without profile
+          // proceed without profile
         }
       }
 
@@ -221,67 +78,84 @@ export function RewriteTab() {
     setLoadingStep("");
   };
 
-  var handleApply = async function () {
-    if (!result || diffSegments.length === 0) return;
-    setLoading(true);
-    setError(null);
+  var handleApplySingle = async function (change: RewriteChange, index: number) {
     try {
-      var changes = extractChangesWithContext(diffSegments);
-      var applied = 0;
-      var failed = 0;
-      for (var ci = 0; ci < changes.length; ci++) {
-        var ch = changes[ci];
-        if (ch.searchText === ch.replacementText) continue;
-        try {
-          var ok = await applyCorrection(ch.searchText, ch.replacementText);
-          if (ok) {
-            applied++;
-          } else {
-            failed++;
-          }
-        } catch (_e) {
-          failed++;
-        }
-      }
-      if (applied > 0) {
-        setViewState("applied");
-        if (failed > 0) {
-          setError(failed + " von " + (applied + failed) + " \u00c4nderungen konnten nicht angewendet werden.");
-        }
+      var ok = await applyCorrection(change.original, change.replacement);
+      if (ok) {
+        var next: Record<number, boolean> = {};
+        for (var k in appliedChanges) { next[k] = appliedChanges[k]; }
+        next[index] = true;
+        setAppliedChanges(next);
       } else {
-        setError("Keine \u00c4nderungen konnten angewendet werden. Bitte markieren Sie den Text erneut.");
+        setError("\"" + change.original.slice(0, 40) + "...\" wurde nicht im Dokument gefunden.");
+        setTimeout(function () { setError(null); }, 4000);
       }
     } catch (_e) {
-      setError("Text konnte nicht ersetzt werden.");
+      setError("Änderung konnte nicht angewendet werden.");
+      setTimeout(function () { setError(null); }, 4000);
     }
-    setLoading(false);
   };
 
-  var handleUndo = async function () {
-    if (!result || diffSegments.length === 0) return;
+  var handleApplyAll = async function () {
+    if (!result || !result.changes) return;
+    setApplyingAll(true);
+    setError(null);
+    var total = result.changes.filter(function (_, i) { return !appliedChanges[i]; }).length;
+    setApplyProgress({ done: 0, total: total });
+
+    var next: Record<number, boolean> = {};
+    for (var k in appliedChanges) { next[k] = appliedChanges[k]; }
+    var doneCount = 0;
+
+    for (var i = 0; i < result.changes.length; i++) {
+      if (next[i]) continue;
+      var ch = result.changes[i];
+      try {
+        var ok = await applyCorrection(ch.original, ch.replacement);
+        if (ok) {
+          next[i] = true;
+        }
+      } catch (_e) {
+        // skip
+      }
+      doneCount++;
+      setApplyProgress({ done: doneCount, total: total });
+      // Real-time update
+      var snapshot: Record<number, boolean> = {};
+      for (var j in next) { snapshot[j] = next[j]; }
+      setAppliedChanges(snapshot);
+    }
+
+    var allApplied = true;
+    for (var ci = 0; ci < result.changes.length; ci++) {
+      if (!next[ci]) { allApplied = false; break; }
+    }
+    if (allApplied) {
+      setViewState("applied");
+    }
+    setApplyingAll(false);
+  };
+
+  var handleUndoAll = async function () {
+    if (!result || !result.changes) return;
     setLoading(true);
     setError(null);
-    try {
-      // Undo in reverse order
-      var changes = extractChangesWithContext(diffSegments);
-      var undone = 0;
-      for (var ci = changes.length - 1; ci >= 0; ci--) {
-        var ch = changes[ci];
-        if (ch.searchText === ch.replacementText) continue;
-        try {
-          // Reverse: search for replacement, put back original
-          var ok = await applyCorrection(ch.replacementText, ch.searchText);
-          if (ok) undone++;
-        } catch (_e) {
-          // skip
-        }
+    var undone = 0;
+    // Undo in reverse order
+    for (var i = result.changes.length - 1; i >= 0; i--) {
+      if (!appliedChanges[i]) continue;
+      var ch = result.changes[i];
+      try {
+        var ok = await applyCorrection(ch.replacement, ch.original);
+        if (ok) undone++;
+      } catch (_e) {
+        // skip
       }
-      if (undone > 0) {
-        setViewState("result");
-      } else {
-        setError("R\u00fcckg\u00e4ngig konnte nicht ausgef\u00fchrt werden.");
-      }
-    } catch (_e) {
+    }
+    if (undone > 0) {
+      setAppliedChanges({});
+      setViewState("result");
+    } else {
       setError("R\u00fcckg\u00e4ngig konnte nicht ausgef\u00fchrt werden.");
     }
     setLoading(false);
@@ -292,7 +166,7 @@ export function RewriteTab() {
     setError(null);
     setViewState("loading");
     setLoadingStep("Schreibe um...");
-    setShowFullOriginal(false);
+    setAppliedChanges({});
     try {
       var rewriteResult = await rewriteText(originalText);
       setResult(rewriteResult);
@@ -318,13 +192,8 @@ export function RewriteTab() {
     // ignore
   }
 
-  // Compute diff when result is available
-  var diffSegments: DiffSegment[] = [];
-  var changeCount = 0;
-  if (result && originalText) {
-    diffSegments = computeWordDiff(originalText, result.rewritten_text);
-    changeCount = countChanges(diffSegments);
-  }
+  var appliedCount = Object.keys(appliedChanges).filter(function (k) { return appliedChanges[Number(k)]; }).length;
+  var totalChanges = result && result.changes ? result.changes.length : 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -442,7 +311,7 @@ export function RewriteTab() {
       {/* Result */}
       {(viewState === "result" || viewState === "applied") && result && (
         <>
-          {/* Style Note (no profile warning) */}
+          {/* Style Note */}
           {result.style_note && (
             <div style={{
               padding: "8px 12px",
@@ -456,156 +325,153 @@ export function RewriteTab() {
             </div>
           )}
 
-          {/* Changes Summary */}
+          {/* Changes Summary + Apply All */}
           <div style={{
             ...cardStyle,
             borderLeft: "4px solid #1976d2",
           }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#1976d2" }}>
-                \u00c4nderungen
+                {totalChanges} {totalChanges === 1 ? "\u00c4nderung" : "\u00c4nderungen"}
               </div>
-              <span style={{
-                fontSize: 10,
-                padding: "1px 8px",
-                background: "#e3f2fd",
-                color: "#1565c0",
-                borderRadius: 10,
-                fontWeight: 600,
-              }}>
-                {changeCount} {changeCount === 1 ? "Stelle" : "Stellen"}
-              </span>
+              {appliedCount > 0 && (
+                <span style={{
+                  fontSize: 10,
+                  padding: "1px 8px",
+                  background: "#e8f5e9",
+                  color: "#2e7d32",
+                  borderRadius: 10,
+                  fontWeight: 600,
+                }}>
+                  {appliedCount}/{totalChanges} \u00fcbernommen
+                </span>
+              )}
             </div>
-            <div style={{ fontSize: 12, color: "#333", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: "#333", lineHeight: 1.5, marginBottom: 8 }}>
               {result.changes_summary}
             </div>
-          </div>
-
-          {/* Inline Diff View */}
-          <div style={cardStyle}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#333" }}>Vorschau</div>
-              <div style={{ display: "flex", gap: 8, fontSize: 9, color: "#888" }}>
-                <span><span style={{ background: "#ffcdd2", padding: "0 3px", borderRadius: 2, textDecoration: "line-through" }}>entfernt</span></span>
-                <span><span style={{ background: "#c8e6c9", padding: "0 3px", borderRadius: 2 }}>neu</span></span>
-              </div>
-            </div>
-            <div style={{
-              fontSize: 12,
-              color: "#333",
-              lineHeight: 1.8,
-              maxHeight: 400,
-              overflowY: "auto",
-              padding: "8px 10px",
-              background: "#fafafa",
-              borderRadius: 6,
-              whiteSpace: "pre-wrap",
-            }}>
-              {diffSegments.map(function (seg, i) {
-                if (seg.type === "equal") {
-                  return <span key={i}>{seg.text}</span>;
-                }
-                if (seg.type === "removed") {
-                  return (
-                    <span
-                      key={i}
-                      style={{
-                        background: "#ffcdd2",
-                        color: "#b71c1c",
-                        textDecoration: "line-through",
-                        borderRadius: 2,
-                        padding: "0 1px",
-                      }}
-                    >
-                      {seg.text}
-                    </span>
-                  );
-                }
-                // added
-                return (
-                  <span
-                    key={i}
-                    style={{
-                      background: "#c8e6c9",
-                      color: "#1b5e20",
-                      borderRadius: 2,
-                      padding: "0 1px",
-                    }}
-                  >
-                    {seg.text}
+            {viewState === "result" && totalChanges > 0 && appliedCount < totalChanges && (
+              <Button
+                appearance="primary"
+                onClick={handleApplyAll}
+                disabled={loading || applyingAll}
+                style={{ width: "100%", borderRadius: 8, fontWeight: 600, background: "#2e7d32" }}
+              >
+                {applyingAll ? (
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Spinner size="tiny" />
+                    <span>{applyProgress.done}/{applyProgress.total}...</span>
                   </span>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Collapsible Full Original */}
-          <div style={cardStyle}>
-            <button
-              onClick={function () { setShowFullOriginal(!showFullOriginal); }}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-                fontSize: 11,
-                color: "#888",
-                fontWeight: 500,
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                width: "100%",
-              }}
-            >
-              <span style={{ fontSize: 10 }}>{showFullOriginal ? "\u25BC" : "\u25B6"}</span>
-              Originaltext {showFullOriginal ? "ausblenden" : "anzeigen"}
-            </button>
-            {showFullOriginal && (
-              <div style={{
-                fontSize: 12,
-                color: "#666",
-                lineHeight: 1.6,
-                maxHeight: 200,
-                overflowY: "auto",
-                padding: "8px 10px",
-                background: "#f5f5f5",
-                borderRadius: 6,
-                whiteSpace: "pre-wrap",
-                marginTop: 8,
-              }}>
-                {originalText}
+                ) : (
+                  "Alle \u00fcbernehmen (" + (totalChanges - appliedCount) + " offen)"
+                )}
+              </Button>
+            )}
+            {viewState === "result" && appliedCount === totalChanges && totalChanges > 0 && (
+              <div style={{ textAlign: "center", fontSize: 12, color: "#2e7d32", fontWeight: 600 }}>
+                Alle \u00c4nderungen \u00fcbernommen!
               </div>
             )}
           </div>
 
-          {/* Action Buttons */}
-          {viewState === "result" && (
-            <div style={{ display: "flex", gap: 8 }}>
-              <Button
-                appearance="primary"
-                onClick={handleApply}
-                disabled={loading}
+          {/* Individual Change Cards */}
+          {result.changes && result.changes.map(function (ch, i) {
+            var isApplied = appliedChanges[i] === true;
+            return (
+              <div
+                key={i}
                 style={{
-                  flex: 2,
-                  borderRadius: 8,
-                  fontWeight: 600,
-                  background: "#2e7d32",
+                  ...cardStyle,
+                  borderLeft: "4px solid " + (isApplied ? "#4caf50" : "#1976d2"),
+                  opacity: isApplied ? 0.6 : 1,
                 }}
               >
-                {loading ? <Spinner size="tiny" /> : "\u00dcbernehmen"}
-              </Button>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: 10,
+                    background: isApplied ? "#c8e6c9" : "#e3f2fd",
+                    color: isApplied ? "#2e7d32" : "#1565c0",
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}>
+                    {isApplied ? "\u2713 \u00dcbernommen" : "\u00c4nderung " + (i + 1)}
+                  </span>
+                  {!isApplied && viewState === "result" && (
+                    <button
+                      onClick={function () { handleApplySingle(ch, i); }}
+                      disabled={loading || applyingAll}
+                      style={{
+                        background: "#2e7d32",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 6,
+                        padding: "3px 10px",
+                        fontSize: 10,
+                        fontWeight: 600,
+                        cursor: (loading || applyingAll) ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      \u00dcbernehmen
+                    </button>
+                  )}
+                </div>
+                {/* Original */}
+                <div style={{ fontSize: 12, color: "#999", textDecoration: "line-through", marginBottom: 2 }}>
+                  {ch.original}
+                </div>
+                {/* Replacement */}
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#2e7d32" }}>
+                  {ch.replacement}
+                </div>
+                {/* Reason */}
+                {ch.reason && (
+                  <div style={{ fontSize: 11, color: "#666", marginTop: 4, lineHeight: 1.4 }}>
+                    {ch.reason}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* No changes returned (fallback) */}
+          {totalChanges === 0 && (
+            <div style={{ ...cardStyle, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#888", marginBottom: 6 }}>
+                Keine einzelnen \u00c4nderungen verf\u00fcgbar.
+              </div>
               <Button
                 appearance="outline"
                 onClick={handleRegenerate}
                 disabled={loading}
-                style={{
-                  flex: 1,
-                  borderRadius: 8,
-                  fontWeight: 600,
-                }}
+                style={{ borderRadius: 8, fontWeight: 600 }}
               >
                 Neu generieren
               </Button>
+            </div>
+          )}
+
+          {/* Regenerate button (when changes exist) */}
+          {viewState === "result" && totalChanges > 0 && (
+            <div style={{ textAlign: "center" }}>
+              <button
+                onClick={handleRegenerate}
+                disabled={loading}
+                style={{
+                  background: "none",
+                  border: "1px solid #ccc",
+                  borderRadius: 8,
+                  padding: "6px 16px",
+                  fontSize: 11,
+                  color: "#666",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  fontWeight: 500,
+                }}
+              >
+                Neu generieren
+              </button>
             </div>
           )}
 
@@ -618,10 +484,10 @@ export function RewriteTab() {
               textAlign: "center",
             }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#2e7d32", marginBottom: 6 }}>
-                &#10003; \u00dcbernommen
+                &#10003; Alle \u00c4nderungen \u00fcbernommen
               </div>
               <button
-                onClick={handleUndo}
+                onClick={handleUndoAll}
                 disabled={loading}
                 style={{
                   background: "none",
@@ -634,7 +500,7 @@ export function RewriteTab() {
                   fontWeight: 500,
                 }}
               >
-                {loading ? "..." : "R\u00fcckg\u00e4ngig"}
+                {loading ? "..." : "Alles r\u00fcckg\u00e4ngig"}
               </button>
             </div>
           )}
